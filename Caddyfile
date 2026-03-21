@@ -1,0 +1,9 @@
+:8443 {
+    tls internal
+    reverse_proxy localhost:8083
+}
+
+:3443 {
+    tls internal
+    reverse_proxy localhost:3005
+}

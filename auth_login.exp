@@ -1,0 +1,10 @@
+#!/usr/bin/expect -f
+set timeout -1
+spawn yarn workspace happy-coder cli auth login --force
+expect "How would you like to authenticate?"
+sleep 1
+send "\033\[B"
+sleep 0.5
+send "\r"
+expect "Waiting for authentication..."
+expect eof
