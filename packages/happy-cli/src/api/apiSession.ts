@@ -241,6 +241,7 @@ export class ApiSessionClient extends EventEmitter {
     }
 
     private routeIncomingMessage(message: unknown) {
+        logger.debugLargeJson('[SOCKET] [UPDATE] Routing incoming message:', message);
         const userResult = UserMessageSchema.safeParse(message);
         if (userResult.success) {
             if (this.pendingMessageCallback) {
@@ -249,60 +250,111 @@ export class ApiSessionClient extends EventEmitter {
                 this.pendingMessages.push(userResult.data);
             }
             return;
+        } else {
+            logger.debug('[SOCKET] [UPDATE] Message did not match UserMessageSchema:', userResult.error);
+            // Fallback for plaintext mode: try to manually construct a valid UserMessage
+            try {
+                if (typeof message === 'object' && message !== null) {
+                    const msg = message as any;
+                    if (msg.role === 'user' && msg.content && typeof msg.content.text === 'string') {
+                        logger.debug('[SOCKET] [UPDATE] Attempting manual UserMessage construction');
+                        const validMsg: UserMessage = {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: msg.content.text
+                            }
+                        };
+                        // Copy over meta if valid
+                        if (msg.meta) {
+                            validMsg.meta = {};
+                            if (msg.meta.permissionMode) validMsg.meta.permissionMode = msg.meta.permissionMode;
+                            if (msg.meta.model) validMsg.meta.model = msg.meta.model;
+                        }
+                        
+                        if (this.pendingMessageCallback) {
+                            this.pendingMessageCallback(validMsg);
+                        } else {
+                            this.pendingMessages.push(validMsg);
+                        }
+                        return;
+                    }
+                }
+            } catch (e) {
+                logger.debug('[SOCKET] [UPDATE] Manual construction failed:', e);
+            }
         }
         this.emit('message', message);
     }
 
     private async fetchMessages() {
+        logger.debug(`[API] fetchMessages called with lastSeq: ${this.lastSeq}`);
         let afterSeq = this.lastSeq;
         while (true) {
-            const response = await axios.get<V3GetSessionMessagesResponse>(
-                `${configuration.serverUrl}/v3/sessions/${encodeURIComponent(this.sessionId)}/messages`,
-                {
-                    params: {
-                        after_seq: afterSeq,
-                        limit: 100
-                    },
-                    headers: this.authHeaders(),
-                    timeout: 60000
+            try {
+                const url = `${configuration.serverUrl}/v3/sessions/${encodeURIComponent(this.sessionId)}/messages`;
+                logger.debug(`[API] Fetching from ${url} with after_seq=${afterSeq}`);
+                
+                const response = await axios.get<V3GetSessionMessagesResponse>(
+                    url,
+                    {
+                        params: {
+                            after_seq: afterSeq,
+                            limit: 100
+                        },
+                        headers: this.authHeaders(),
+                        timeout: 60000
+                    }
+                );
+                
+                logger.debug(`[API] fetchMessages got response with ${response.data.messages?.length || 0} messages, hasMore: ${response.data.hasMore}`);
+
+                const messages = Array.isArray(response.data.messages) ? response.data.messages : [];
+                let maxSeq = afterSeq;
+
+                for (const message of messages) {
+                    logger.debug(`[API] Processing fetched message seq: ${message.seq}`);
+                    if (message.seq > maxSeq) {
+                        maxSeq = message.seq;
+                    }
+
+                    if (message.content?.t !== 'encrypted') {
+                        logger.debug(`[API] Skipping message seq ${message.seq} because content.t is ${message.content?.t}`);
+                        continue;
+                    }
+
+                    try {
+                        const body = decrypt(this.encryptionKey, this.encryptionVariant, decodeBase64(message.content.c));
+                        logger.debug(`[API] Decrypted message seq ${message.seq} successfully`);
+                        this.routeIncomingMessage(body);
+                    } catch (error) {
+                        logger.debug('[API] Failed to decrypt fetched message', {
+                            sessionId: this.sessionId,
+                            seq: message.seq,
+                            error
+                        });
+                    }
                 }
-            );
 
-            const messages = Array.isArray(response.data.messages) ? response.data.messages : [];
-            let maxSeq = afterSeq;
+                this.lastSeq = Math.max(this.lastSeq, maxSeq);
+                const hasMore = !!response.data.hasMore;
 
-            for (const message of messages) {
-                if (message.seq > maxSeq) {
-                    maxSeq = message.seq;
-                }
-
-                if (message.content?.t !== 'encrypted') {
-                    continue;
-                }
-
-                try {
-                    const body = decrypt(this.encryptionKey, this.encryptionVariant, decodeBase64(message.content.c));
-                    this.routeIncomingMessage(body);
-                } catch (error) {
-                    logger.debug('[API] Failed to decrypt fetched message', {
+                if (maxSeq === afterSeq && hasMore) {
+                    logger.debug('[API] fetchMessages pagination stalled, stopping to avoid infinite loop', {
                         sessionId: this.sessionId,
-                        seq: message.seq,
-                        error
+                        afterSeq
                     });
+                    break;
                 }
-            }
-
-            this.lastSeq = Math.max(this.lastSeq, maxSeq);
-            const hasMore = !!response.data.hasMore;
-            if (hasMore && maxSeq === afterSeq) {
-                logger.debug('[API] fetchMessages pagination stalled, stopping to avoid infinite loop', {
-                    sessionId: this.sessionId,
-                    afterSeq
-                });
-                break;
-            }
-            afterSeq = maxSeq;
-            if (!hasMore) {
+                afterSeq = maxSeq;
+                if (!hasMore) {
+                    logger.debug('[API] fetchMessages finished successfully');
+                    break;
+                }
+            } catch (err: any) {
+                logger.debug(`[API] fetchMessages failed: ${err.message}`);
+                // Don't throw, just break out of the loop and let the next invalidate try again
+                // This prevents backoff from looping forever if the server returns 404/500
                 break;
             }
         }

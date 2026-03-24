@@ -6,6 +6,15 @@ export type KeyTreeState = {
 };
 
 export async function deriveSecretKeyTreeRoot(seed: Uint8Array, usage: string): Promise<KeyTreeState> {
+    // --- PLAINTEXT MODE BYPASS ---
+    if (process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true') {
+        return {
+            key: new Uint8Array(32),
+            chainCode: new Uint8Array(32)
+        };
+    }
+    // -----------------------------
+
     const I = await hmac_sha512(new TextEncoder().encode(usage + ' Master Seed'), seed);
     return {
         key: I.slice(0, 32),
@@ -14,6 +23,14 @@ export async function deriveSecretKeyTreeRoot(seed: Uint8Array, usage: string): 
 }
 
 export async function deriveSecretKeyTreeChild(chainCode: Uint8Array, index: string): Promise<KeyTreeState> {
+    // --- PLAINTEXT MODE BYPASS ---
+    if (process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true') {
+        return {
+            key: new Uint8Array(32),
+            chainCode: new Uint8Array(32)
+        };
+    }
+    // -----------------------------
 
     // Prepare data
     const data = new Uint8Array([0x0, ...new TextEncoder().encode(index)]); // prepend 0x00 for separator
@@ -27,6 +44,12 @@ export async function deriveSecretKeyTreeChild(chainCode: Uint8Array, index: str
 }
 
 export async function deriveKey(master: Uint8Array, usage: string, path: string[]): Promise<Uint8Array> {
+    // --- PLAINTEXT MODE BYPASS ---
+    if (process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true') {
+        return new Uint8Array(32);
+    }
+    // -----------------------------
+
     let state = await deriveSecretKeyTreeRoot(master, usage);
     let remaining = [...path];
     while (remaining.length > 0) {

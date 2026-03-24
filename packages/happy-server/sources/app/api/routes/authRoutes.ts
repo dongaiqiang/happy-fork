@@ -17,12 +17,18 @@ export function authRoutes(app: Fastify) {
     }, async (request, reply) => {
         const tweetnacl = (await import("tweetnacl")).default;
         const publicKey = privacyKit.decodeBase64(request.body.publicKey);
-        const challenge = privacyKit.decodeBase64(request.body.challenge);
-        const signature = privacyKit.decodeBase64(request.body.signature);
-        const isValid = tweetnacl.sign.detached.verify(challenge, signature, publicKey);
-        if (!isValid) {
-            return reply.code(401).send({ error: 'Invalid signature' });
+        
+        // --- PLAINTEXT MODE BYPASS ---
+        const isPlaintextMode = process.env.ENABLE_PLAINTEXT_MODE === 'true';
+        if (!isPlaintextMode) {
+            const challenge = privacyKit.decodeBase64(request.body.challenge);
+            const signature = privacyKit.decodeBase64(request.body.signature);
+            const isValid = tweetnacl.sign.detached.verify(challenge, signature, publicKey);
+            if (!isValid) {
+                return reply.code(401).send({ error: 'Invalid signature' });
+            }
         }
+        // -----------------------------
 
         // Create or update user in database
         const publicKeyHex = privacyKit.encodeHex(publicKey);
@@ -133,36 +139,48 @@ export function authRoutes(app: Fastify) {
             })
         }
     }, async (request, reply) => {
-        log({ module: 'auth-response' }, `Auth response endpoint hit - user: ${request.userId}, publicKey: ${request.body.publicKey.substring(0, 20)}...`);
-        const tweetnacl = (await import("tweetnacl")).default;
-        const publicKey = privacyKit.decodeBase64(request.body.publicKey);
-        const isValid = tweetnacl.box.publicKeyLength === publicKey.length;
-        if (!isValid) {
-            log({ module: 'auth-response' }, `Invalid public key length: ${publicKey.length}`);
-            return reply.code(401).send({ error: 'Invalid public key' });
-        }
-        const publicKeyHex = privacyKit.encodeHex(publicKey);
-        log({ module: 'auth-response' }, `Looking for auth request with publicKey hex: ${publicKeyHex}`);
-        const authRequest = await db.terminalAuthRequest.findUnique({
-            where: { publicKey: publicKeyHex }
-        });
-        if (!authRequest) {
-            log({ module: 'auth-response' }, `Auth request not found for publicKey: ${publicKeyHex}`);
-            // Let's also check what auth requests exist
-            const allRequests = await db.terminalAuthRequest.findMany({
-                take: 5,
-                orderBy: { createdAt: 'desc' }
+        try {
+            log({ module: 'auth-response' }, `Auth response endpoint hit - user: ${request.userId}, publicKey: ${request.body.publicKey.substring(0, 20)}...`);
+            const tweetnacl = (await import("tweetnacl")).default;
+            const publicKey = privacyKit.decodeBase64(request.body.publicKey);
+            
+            // --- PLAINTEXT MODE BYPASS ---
+            const isPlaintextMode = process.env.ENABLE_PLAINTEXT_MODE === 'true';
+            if (!isPlaintextMode) {
+                const isValid = tweetnacl.box.publicKeyLength === publicKey.length;
+                if (!isValid) {
+                    log({ module: 'auth-response' }, `Invalid public key length: ${publicKey.length}`);
+                    return reply.code(401).send({ error: 'Invalid public key' });
+                }
+            }
+            // -----------------------------
+            
+            const publicKeyHex = privacyKit.encodeHex(publicKey);
+            log({ module: 'auth-response' }, `Looking for auth request with publicKey hex: ${publicKeyHex}`);
+            const authRequest = await db.terminalAuthRequest.findUnique({
+                where: { publicKey: publicKeyHex }
             });
-            log({ module: 'auth-response' }, `Recent auth requests in DB: ${JSON.stringify(allRequests.map(r => ({ id: r.id, publicKey: r.publicKey.substring(0, 20) + '...', hasResponse: !!r.response })))}`);
-            return reply.code(404).send({ error: 'Request not found' });
+            if (!authRequest) {
+                log({ module: 'auth-response' }, `Auth request not found for publicKey: ${publicKeyHex}`);
+                // Let's also check what auth requests exist
+                const allRequests = await db.terminalAuthRequest.findMany({
+                    take: 5,
+                    orderBy: { createdAt: 'desc' }
+                });
+                log({ module: 'auth-response' }, `Recent auth requests in DB: ${JSON.stringify(allRequests.map(r => ({ id: r.id, publicKey: r.publicKey.substring(0, 20) + '...', hasResponse: !!r.response })))}`);
+                return reply.code(404).send({ error: 'Request not found' });
+            }
+            if (!authRequest.response) {
+                await db.terminalAuthRequest.update({
+                    where: { id: authRequest.id },
+                    data: { response: request.body.response, responseAccountId: request.userId }
+                });
+            }
+            return reply.send({ success: true });
+        } catch (error) {
+            log({ module: 'auth-response', level: 'error' }, `Failed to process auth response: ${error}`);
+            return reply.code(500).send({ error: 'Internal Server Error' });
         }
-        if (!authRequest.response) {
-            await db.terminalAuthRequest.update({
-                where: { id: authRequest.id },
-                data: { response: request.body.response, responseAccountId: request.userId }
-            });
-        }
-        return reply.send({ success: true });
     });
 
     // Account auth request

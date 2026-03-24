@@ -10,6 +10,7 @@ export const LocalSettingsSchema = z.object({
     devModeEnabled: z.boolean().describe('Enable developer menu in settings'),
     commandPaletteEnabled: z.boolean().describe('Enable CMD+K command palette (web only)'),
     themePreference: z.enum(['light', 'dark', 'adaptive']).describe('Theme preference: light, dark, or adaptive (follows system)'),
+    voiceInputMode: z.enum(['elevenlabs_call', 'streaming_asr']).describe('Voice input mode: elevenlabs_call (default) or streaming_asr'),
     markdownCopyV2: z.boolean().describe('Replace native paragraph selection with long-press modal for full markdown copy'),
     // CLI version acknowledgments - keyed by machineId
     acknowledgedCliVersions: z.record(z.string(), z.string()).describe('Acknowledged CLI versions per machine'),
@@ -33,6 +34,7 @@ export const localSettingsDefaults: LocalSettings = {
     devModeEnabled: false,
     commandPaletteEnabled: false,
     themePreference: 'adaptive',
+    voiceInputMode: 'elevenlabs_call',
     markdownCopyV2: false,
     acknowledgedCliVersions: {},
 };

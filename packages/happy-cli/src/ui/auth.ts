@@ -17,8 +17,18 @@ import { logger } from './logger';
 export async function doAuth(): Promise<Credentials | null> {
     console.clear();
 
-    // Show authentication method selector
-    const authMethod = await selectAuthenticationMethod();
+    // --- PLAYWRIGHT AUTOMATION BYPASS ---
+    let authMethod: AuthMethod | null;
+    if (process.env.AUTO_SELECT_MOBILE === 'true') {
+        authMethod = 'mobile';
+    } else if (process.env.AUTO_SELECT_WEB === 'true') {
+        authMethod = 'web';
+    } else {
+        // Show authentication method selector
+        authMethod = await selectAuthenticationMethod();
+    }
+    // ------------------------------------
+
     if (!authMethod) {
         console.log('\nAuthentication cancelled.\n');
         process.exit(0);
@@ -224,6 +234,15 @@ async function waitForAuthentication(keypair: tweetnacl.BoxKeyPair): Promise<Cre
 }
 
 export function decryptWithEphemeralKey(encryptedBundle: Uint8Array, recipientSecretKey: Uint8Array): Uint8Array | null {
+    // --- PLAINTEXT MODE BYPASS ---
+    if (process.env.ENABLE_PLAINTEXT_MODE === 'true') {
+        if (encryptedBundle.length >= 56) {
+            return encryptedBundle.slice(56);
+        }
+        return encryptedBundle;
+    }
+    // -----------------------------
+
     // Extract components from bundle: ephemeral public key (32 bytes) + nonce (24 bytes) + encrypted data
     const ephemeralPublicKey = encryptedBundle.slice(0, 32);
     const nonce = encryptedBundle.slice(32, 32 + tweetnacl.box.nonceLength);

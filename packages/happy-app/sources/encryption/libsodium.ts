@@ -2,10 +2,24 @@ import { getRandomBytes } from 'expo-crypto';
 import sodium from '@/encryption/libsodium.lib';
 
 export function getPublicKeyForBox(secretKey: Uint8Array): Uint8Array {
+    // --- PLAINTEXT MODE BYPASS ---
+    if (process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true') {
+        return new Uint8Array(32);
+    }
+    // -----------------------------
     return sodium.crypto_box_seed_keypair(secretKey).publicKey;
 }
 
 export function encryptBox(data: Uint8Array, recipientPublicKey: Uint8Array): Uint8Array {
+    // --- PLAINTEXT MODE BYPASS ---
+    if (process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true') {
+        // Return dummy bundle: 32 bytes (ephemeral key) + 24 bytes (nonce) + data
+        const result = new Uint8Array(32 + 24 + data.length);
+        result.set(data, 32 + 24);
+        return result;
+    }
+    // -----------------------------
+
     const ephemeralKeyPair = sodium.crypto_box_keypair();
     const nonce = getRandomBytes(sodium.crypto_box_NONCEBYTES);
     const encrypted = sodium.crypto_box_easy(data, nonce, recipientPublicKey, ephemeralKeyPair.privateKey);
@@ -20,6 +34,15 @@ export function encryptBox(data: Uint8Array, recipientPublicKey: Uint8Array): Ui
 }
 
 export function decryptBox(encryptedBundle: Uint8Array, recipientSecretKey: Uint8Array): Uint8Array | null {
+    // --- PLAINTEXT MODE BYPASS ---
+    if (process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true') {
+        if (encryptedBundle.length >= 56) {
+            return encryptedBundle.slice(56);
+        }
+        return encryptedBundle;
+    }
+    // -----------------------------
+
     // Extract components from bundle: ephemeral public key (32 bytes) + nonce (24 bytes) + encrypted data
     const ephemeralPublicKey = encryptedBundle.slice(0, sodium.crypto_box_PUBLICKEYBYTES);
     const nonce = encryptedBundle.slice(sodium.crypto_box_PUBLICKEYBYTES, sodium.crypto_box_PUBLICKEYBYTES + sodium.crypto_box_NONCEBYTES);

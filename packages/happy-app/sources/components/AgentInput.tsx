@@ -25,6 +25,8 @@ import { Metadata } from '@/sync/storageTypes';
 import { AIBackendProfile, getProfileEnvironmentVariables, validateProfileForAgent } from '@/sync/settings';
 import { getBuiltInProfile } from '@/sync/profileUtils';
 
+import { SmartVoiceButton } from '@/features/custom-asr/SmartVoiceButton';
+
 interface AgentInputProps {
     value: string;
     placeholder: string;
@@ -1098,70 +1100,17 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                                 </View>
 
                                 {/* Send/Voice button - aligned with first row */}
-                                <View
-                                    style={[
-                                        styles.sendButton,
-                                        (hasText || props.isSending || (props.onMicPress && !props.isMicActive))
-                                            ? styles.sendButtonActive
-                                            : styles.sendButtonInactive
-                                    ]}
-                                >
-                                    <Pressable
-                                        style={(p) => ({
-                                            width: '100%',
-                                            height: '100%',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            opacity: p.pressed ? 0.7 : 1,
-                                        })}
-                                        hitSlop={{ top: 5, bottom: 10, left: 0, right: 0 }}
-                                        onPress={() => {
-                                            hapticsLight();
-                                            if (hasText) {
-                                                props.onSend();
-                                            } else {
-                                                props.onMicPress?.();
-                                            }
-                                        }}
-                                        disabled={props.isSendDisabled || props.isSending || (!hasText && !props.onMicPress)}
-                                    >
-                                        {props.isSending ? (
-                                            <ActivityIndicator
-                                                size="small"
-                                                color={theme.colors.button.primary.tint}
-                                            />
-                                        ) : hasText ? (
-                                            <Octicons
-                                                name="arrow-up"
-                                                size={16}
-                                                color={theme.colors.button.primary.tint}
-                                                style={[
-                                                    styles.sendButtonIcon,
-                                                    { marginTop: Platform.OS === 'web' ? 2 : 0 }
-                                                ]}
-                                            />
-                                        ) : props.onMicPress && !props.isMicActive ? (
-                                            <Image
-                                                source={require('@/assets/images/icon-voice-white.png')}
-                                                style={{
-                                                    width: 24,
-                                                    height: 24,
-                                                }}
-                                                tintColor={theme.colors.button.primary.tint}
-                                            />
-                                        ) : (
-                                            <Octicons
-                                                name="arrow-up"
-                                                size={16}
-                                                color={theme.colors.button.primary.tint}
-                                                style={[
-                                                    styles.sendButtonIcon,
-                                                    { marginTop: Platform.OS === 'web' ? 2 : 0 }
-                                                ]}
-                                            />
-                                        )}
-                                    </Pressable>
-                                </View>
+                                <SmartVoiceButton
+                                    hasText={hasText}
+                                    isSending={props.isSending}
+                                    isSendDisabled={props.isSendDisabled}
+                                    onSend={props.onSend}
+                                    onMicPress={props.onMicPress}
+                                    isMicActive={props.isMicActive}
+                                    styles={styles}
+                                    sessionId={props.sessionId}
+                                    onTextUpdate={props.onChangeText}
+                                />
                             </View>
                         </View>
                     </View>

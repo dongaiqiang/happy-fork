@@ -18,7 +18,10 @@ export class InvalidateSync {
         if (!this._invalidated) {
             this._invalidated = true;
             this._invalidatedDouble = false;
-            this._doSync();
+            // Fire and forget
+            this._doSync().catch(err => {
+                console.error("InvalidateSync unhandled error:", err);
+            });
         } else {
             if (!this._invalidatedDouble) {
                 this._invalidatedDouble = true;
@@ -53,19 +56,26 @@ export class InvalidateSync {
 
 
     private _doSync = async () => {
-        await backoff(async () => {
+        try {
+            console.error("InvalidateSync _doSync started. stopped:", this._stopped);
             if (this._stopped) {
                 return;
             }
             await this._command();
-        });
+            console.error("InvalidateSync _doSync command finished.");
+        } catch (e) {
+            console.error("InvalidateSync _doSync error:", e);
+        }
+        
         if (this._stopped) {
             this._notifyPendings();
             return;
         }
         if (this._invalidatedDouble) {
             this._invalidatedDouble = false;
-            this._doSync();
+            this._doSync().catch(err => {
+                console.error("InvalidateSync unhandled double sync error:", err);
+            });
         } else {
             this._invalidated = false;
             this._notifyPendings();

@@ -28,6 +28,20 @@ export class SecretBoxEncryption implements Encryptor, Decryptor {
         // Process as batch, not Promise.all - more efficient
         const results: (any | null)[] = [];
         for (const item of data) {
+            // --- PLAINTEXT MODE BYPASS ---
+            if (item.length > 10) {
+                const prefix = new TextDecoder().decode(item.slice(0, 10));
+                if (prefix === 'PLAINTEXT:') {
+                    try {
+                        const jsonStr = new TextDecoder().decode(item.slice(10));
+                        results.push(JSON.parse(jsonStr));
+                        continue;
+                    } catch (e) {
+                        console.error('Failed to parse plaintext payload in SecretBoxEncryption', e);
+                    }
+                }
+            }
+            // -----------------------------
             results.push(decryptSecretBox(item, this.secretKey));
         }
         return results;
@@ -36,8 +50,19 @@ export class SecretBoxEncryption implements Encryptor, Decryptor {
     async encrypt(data: any[]): Promise<Uint8Array[]> {
         // Process as batch, not Promise.all - more efficient
         const results: Uint8Array[] = [];
+        
+        // --- PLAINTEXT MODE BYPASS ---
+        // Check EXPO_PUBLIC env var
+        const isPlaintextMode = process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true';
+        // -----------------------------
+
         for (const item of data) {
-            results.push(encryptSecretBox(item, this.secretKey));
+            if (isPlaintextMode) {
+                const jsonStr = JSON.stringify(item);
+                results.push(new TextEncoder().encode(`PLAINTEXT:${jsonStr}`));
+            } else {
+                results.push(encryptSecretBox(item, this.secretKey));
+            }
         }
         return results;
     }
@@ -57,8 +82,21 @@ export class BoxEncryption implements Encryptor, Decryptor {
     async encrypt(data: any[]): Promise<Uint8Array[]> {
         // Process as batch, not Promise.all - more efficient
         const results: Uint8Array[] = [];
+        
+        // --- PLAINTEXT MODE BYPASS ---
+        const isPlaintextMode = process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true';
+        // -----------------------------
+
         for (const item of data) {
-            results.push(encryptBox(encodeUTF8(JSON.stringify(item)), this.publicKey));
+            if (isPlaintextMode) {
+                const jsonStr = JSON.stringify(item);
+                // Make sure to match how CLI daemon decrypts: JSON.parse(new TextDecoder().decode(decodeBase64(request.params)))
+                // We must prefix it with PLAINTEXT: for some endpoints that still expect it,
+                // but the daemon side now strips anything before '{' or '[' anyway
+                results.push(new TextEncoder().encode(`PLAINTEXT:${jsonStr}`));
+            } else {
+                results.push(encryptBox(encodeUTF8(JSON.stringify(item)), this.publicKey));
+            }
         }
         return results;
     }
@@ -67,6 +105,36 @@ export class BoxEncryption implements Encryptor, Decryptor {
         // Process as batch, not Promise.all - more efficient
         const results: (any | null)[] = [];
         for (const item of data) {
+            // --- PLAINTEXT MODE BYPASS ---
+            const isPlaintextMode = process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true';
+            if (isPlaintextMode || item.length > 10) {
+                // If EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE is true, try to decode as plain JSON directly first
+                if (isPlaintextMode) {
+                    try {
+                        const jsonStr = new TextDecoder().decode(item);
+                        // Make sure it looks like JSON before parsing to avoid unnecessary errors
+                        if (jsonStr.trim().startsWith('{') || jsonStr.trim().startsWith('[')) {
+                            results.push(JSON.parse(jsonStr));
+                            continue;
+                        }
+                    } catch (e) {
+                        // Fall back to PLAINTEXT: prefix check
+                    }
+                }
+
+                const prefix = new TextDecoder().decode(item.slice(0, 10));
+                if (prefix === 'PLAINTEXT:') {
+                    try {
+                        const jsonStr = new TextDecoder().decode(item.slice(10));
+                        results.push(JSON.parse(jsonStr));
+                        continue;
+                    } catch (e) {
+                        console.error('Failed to parse plaintext payload in BoxEncryption', e);
+                    }
+                }
+            }
+            // -----------------------------
+
             let decrypted = decryptBox(item, this.privateKey);
             if (!decrypted) {
                 results.push(null);
@@ -90,13 +158,28 @@ export class AES256Encryption implements Encryptor, Decryptor {
     async encrypt(data: any[]): Promise<Uint8Array[]> {
         // Process as batch, not Promise.all - more efficient
         const results: Uint8Array[] = [];
+        
+        // --- PLAINTEXT MODE BYPASS ---
+        const isPlaintextMode = process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true';
+        // -----------------------------
+
         for (const item of data) {
-            // Serialize to JSON string first
-            const encrypted = decodeBase64(await encryptAESGCMString(JSON.stringify(item), this.secretKeyB64));
-            let output = new Uint8Array(encrypted.length + 1);
-            output[0] = 0;
-            output.set(encrypted, 1);
-            results.push(output);
+            if (isPlaintextMode) {
+                // To match AES output format which starts with 0
+                const jsonStr = JSON.stringify(item);
+                const plaintextBytes = new TextEncoder().encode(`PLAINTEXT:${jsonStr}`);
+                let output = new Uint8Array(plaintextBytes.length + 1);
+                output[0] = 0;
+                output.set(plaintextBytes, 1);
+                results.push(output);
+            } else {
+                // Serialize to JSON string first
+                const encrypted = decodeBase64(await encryptAESGCMString(JSON.stringify(item), this.secretKeyB64));
+                let output = new Uint8Array(encrypted.length + 1);
+                output[0] = 0;
+                output.set(encrypted, 1);
+                results.push(output);
+            }
         }
         return results;
     }
@@ -106,11 +189,38 @@ export class AES256Encryption implements Encryptor, Decryptor {
         const results: (any | null)[] = [];
         for (const item of data) {
             try {
+                // --- PLAINTEXT MODE BYPASS ---
+                const isPlaintextMode = process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true';
+                if (isPlaintextMode) {
+                    try {
+                        const jsonStr = new TextDecoder().decode(item);
+                        // Also try to find the first '{' or '[' just like we did on Daemon side
+                        const jsonStartIndex = Math.max(jsonStr.indexOf('{'), jsonStr.indexOf('['));
+                        if (jsonStartIndex !== -1) {
+                            const cleanJsonStr = jsonStr.substring(jsonStartIndex);
+                            results.push(JSON.parse(cleanJsonStr));
+                            continue;
+                        }
+                    } catch (e) {}
+                }
+                
                 if (item[0] !== 0) {
                     results.push(null);
                     continue;
                 }
-                const decryptedString = await decryptAESGCMString(encodeBase64(item.slice(1)), this.secretKeyB64);
+                
+                const payload = item.slice(1);
+                if (payload.length > 10) {
+                    const prefix = new TextDecoder().decode(payload.slice(0, 10));
+                    if (prefix === 'PLAINTEXT:') {
+                        const jsonStr = new TextDecoder().decode(payload.slice(10));
+                        results.push(JSON.parse(jsonStr));
+                        continue;
+                    }
+                }
+                // -----------------------------
+
+                const decryptedString = await decryptAESGCMString(encodeBase64(payload), this.secretKeyB64);
                 if (!decryptedString) {
                     results.push(null);
                 } else {

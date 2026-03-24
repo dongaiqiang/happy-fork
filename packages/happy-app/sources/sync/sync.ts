@@ -457,7 +457,25 @@ class Sync {
         const { permissionMode, model } = resolveMessageModeMeta(session);
 
         // Generate local ID
-        const localId = randomUUID();
+        // expo-crypto's randomUUID has issues on some Web environments (getCrypto(...).randomUUID is not a function)
+        // Fallback to a custom UUID generator if randomUUID is not available or fails
+        const generateSafeUUID = () => {
+            try {
+                if (typeof randomUUID === 'function') {
+                    return randomUUID();
+                }
+            } catch (e) {
+                // Ignore and fall through to fallback
+            }
+            
+            // Fallback UUID v4 generator
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        };
+
+        const localId = generateSafeUUID();
 
         // Determine sentFrom based on platform
         let sentFrom: string;

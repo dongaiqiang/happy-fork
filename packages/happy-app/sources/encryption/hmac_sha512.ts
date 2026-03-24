@@ -1,6 +1,14 @@
 import * as Crypto from 'expo-crypto';
 
 export async function hmac_sha512(key: Uint8Array, data: Uint8Array): Promise<Uint8Array> {    
+    // --- PLAINTEXT MODE BYPASS ---
+    // If Crypto.digest is undefined (e.g. running on web over non-HTTPS),
+    // and we are in plaintext mode, return a dummy array to prevent crash
+    if (process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true' && !Crypto.digest) {
+        return new Uint8Array(64); // SHA512 output is 64 bytes
+    }
+    // -----------------------------
+
     const blockSize = 128; // SHA512 block size in bytes
     const opad = 0x5c;
     const ipad = 0x36;

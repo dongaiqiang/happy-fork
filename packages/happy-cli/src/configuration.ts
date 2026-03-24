@@ -30,7 +30,7 @@ class Configuration {
   constructor() {
     // Server configuration - priority: parameter > environment > default
     this.serverUrl = process.env.HAPPY_SERVER_URL || 'http://localhost:3005'
-    this.webappUrl = process.env.HAPPY_WEBAPP_URL || 'http://localhost:8083'
+    this.webappUrl = process.env.HAPPY_WEBAPP_URL || process.env.EXPO_PUBLIC_SERVER_URL || 'http://localhost:8083'
 
     // Check if we're running as daemon based on process args
     const args = process.argv.slice(2)

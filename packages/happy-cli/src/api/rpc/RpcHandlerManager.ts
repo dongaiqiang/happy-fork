@@ -58,15 +58,42 @@ export class RpcHandlerManager {
         try {
             const handler = this.handlers.get(request.method);
 
+            // --- PLAINTEXT MODE BYPASS ---
+            const isPlaintextMode = process.env.ENABLE_PLAINTEXT_MODE === 'true';
+            // -----------------------------
+
             if (!handler) {
                 this.logger('[RPC] [ERROR] Method not found', { method: request.method });
                 const errorResponse = { error: 'Method not found' };
-                const encryptedError = encodeBase64(encrypt(this.encryptionKey, this.encryptionVariant, errorResponse));
+                const encryptedError = isPlaintextMode
+                    ? encodeBase64(new TextEncoder().encode(JSON.stringify(errorResponse)))
+                    : encodeBase64(encrypt(this.encryptionKey, this.encryptionVariant, errorResponse));
                 return encryptedError;
             }
 
             // Decrypt the incoming params
-            const decryptedParams = decrypt(this.encryptionKey, this.encryptionVariant, decodeBase64(request.params));
+            let decryptedParams;
+            if (isPlaintextMode) {
+                try {
+                    // Try to parse as direct JSON first
+                    const decodedStr = new TextDecoder().decode(decodeBase64(request.params));
+                    
+                    // The App sends the payload as "PLAINTEXT:{"type":"spawn-in-directory"...}" due to how Expo/React Native handles Uint8Arrays in some cases,
+                    // or it sends it as "\x00PLAINTEXT:{...}" (with a leading null byte for format versioning)
+                    // Let's robustly extract the JSON part regardless of the prefix
+                    let jsonStr = decodedStr;
+                    const jsonStartIndex = Math.max(decodedStr.indexOf('{'), decodedStr.indexOf('['));
+                    if (jsonStartIndex !== -1) {
+                        jsonStr = decodedStr.substring(jsonStartIndex);
+                    }
+                    decryptedParams = JSON.parse(jsonStr);
+                } catch (e) {
+                    this.logger('[RPC] [ERROR] Failed to parse plaintext params', { error: e });
+                    throw new Error('Failed to parse plaintext params');
+                }
+            } else {
+                decryptedParams = decrypt(this.encryptionKey, this.encryptionVariant, decodeBase64(request.params));
+            }
 
             // Call the handler
             this.logger('[RPC] Calling handler', { method: request.method });
@@ -74,7 +101,9 @@ export class RpcHandlerManager {
             this.logger('[RPC] Handler returned', { method: request.method, hasResult: result !== undefined });
 
             // Encrypt and return the response
-            const encryptedResponse = encodeBase64(encrypt(this.encryptionKey, this.encryptionVariant, result));
+            const encryptedResponse = isPlaintextMode
+                ? encodeBase64(new TextEncoder().encode(JSON.stringify(result)))
+                : encodeBase64(encrypt(this.encryptionKey, this.encryptionVariant, result));
             this.logger('[RPC] Sending encrypted response', { method: request.method, responseLength: encryptedResponse.length });
             return encryptedResponse;
         } catch (error) {
@@ -82,7 +111,10 @@ export class RpcHandlerManager {
             const errorResponse = {
                 error: error instanceof Error ? error.message : 'Unknown error'
             };
-            return encodeBase64(encrypt(this.encryptionKey, this.encryptionVariant, errorResponse));
+            const isPlaintextMode = process.env.ENABLE_PLAINTEXT_MODE === 'true';
+            return isPlaintextMode
+                ? encodeBase64(new TextEncoder().encode(JSON.stringify(errorResponse)))
+                : encodeBase64(encrypt(this.encryptionKey, this.encryptionVariant, errorResponse));
         }
     }
 

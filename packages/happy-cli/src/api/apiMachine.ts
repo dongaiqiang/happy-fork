@@ -164,21 +164,32 @@ export class ApiMachineClient {
     async updateMachineMetadata(handler: (metadata: MachineMetadata | null) => MachineMetadata): Promise<void> {
         await backoff(async () => {
             const updated = handler(this.machine.metadata);
+            
+            // --- PLAINTEXT MODE BYPASS ---
+            const isPlaintextMode = process.env.ENABLE_PLAINTEXT_MODE === 'true';
+            const encodedMetadata = isPlaintextMode
+                ? encodeBase64(new TextEncoder().encode(JSON.stringify(updated)))
+                : encodeBase64(encrypt(this.machine.encryptionKey, this.machine.encryptionVariant, updated));
+            // -----------------------------
 
             const answer = await this.socket.emitWithAck('machine-update-metadata', {
                 machineId: this.machine.id,
-                metadata: encodeBase64(encrypt(this.machine.encryptionKey, this.machine.encryptionVariant, updated)),
+                metadata: encodedMetadata,
                 expectedVersion: this.machine.metadataVersion
             });
 
             if (answer.result === 'success') {
-                this.machine.metadata = decrypt(this.machine.encryptionKey, this.machine.encryptionVariant, decodeBase64(answer.metadata));
+                this.machine.metadata = isPlaintextMode
+                    ? JSON.parse(new TextDecoder().decode(decodeBase64(answer.metadata)))
+                    : decrypt(this.machine.encryptionKey, this.machine.encryptionVariant, decodeBase64(answer.metadata));
                 this.machine.metadataVersion = answer.version;
                 logger.debug('[API MACHINE] Metadata updated successfully');
             } else if (answer.result === 'version-mismatch') {
                 if (answer.version > this.machine.metadataVersion) {
                     this.machine.metadataVersion = answer.version;
-                    this.machine.metadata = decrypt(this.machine.encryptionKey, this.machine.encryptionVariant, decodeBase64(answer.metadata));
+                    this.machine.metadata = isPlaintextMode
+                        ? JSON.parse(new TextDecoder().decode(decodeBase64(answer.metadata)))
+                        : decrypt(this.machine.encryptionKey, this.machine.encryptionVariant, decodeBase64(answer.metadata));
                 }
                 throw new Error('Metadata version mismatch'); // Triggers retry
             }
@@ -193,20 +204,31 @@ export class ApiMachineClient {
         await backoff(async () => {
             const updated = handler(this.machine.daemonState);
 
+            // --- PLAINTEXT MODE BYPASS ---
+            const isPlaintextMode = process.env.ENABLE_PLAINTEXT_MODE === 'true';
+            const encodedDaemonState = isPlaintextMode
+                ? encodeBase64(new TextEncoder().encode(JSON.stringify(updated)))
+                : encodeBase64(encrypt(this.machine.encryptionKey, this.machine.encryptionVariant, updated));
+            // -----------------------------
+
             const answer = await this.socket.emitWithAck('machine-update-state', {
                 machineId: this.machine.id,
-                daemonState: encodeBase64(encrypt(this.machine.encryptionKey, this.machine.encryptionVariant, updated)),
+                daemonState: encodedDaemonState,
                 expectedVersion: this.machine.daemonStateVersion
             });
 
             if (answer.result === 'success') {
-                this.machine.daemonState = decrypt(this.machine.encryptionKey, this.machine.encryptionVariant, decodeBase64(answer.daemonState));
+                this.machine.daemonState = isPlaintextMode
+                    ? JSON.parse(new TextDecoder().decode(decodeBase64(answer.daemonState)))
+                    : decrypt(this.machine.encryptionKey, this.machine.encryptionVariant, decodeBase64(answer.daemonState));
                 this.machine.daemonStateVersion = answer.version;
                 logger.debug('[API MACHINE] Daemon state updated successfully');
             } else if (answer.result === 'version-mismatch') {
                 if (answer.version > this.machine.daemonStateVersion) {
                     this.machine.daemonStateVersion = answer.version;
-                    this.machine.daemonState = decrypt(this.machine.encryptionKey, this.machine.encryptionVariant, decodeBase64(answer.daemonState));
+                    this.machine.daemonState = isPlaintextMode
+                        ? JSON.parse(new TextDecoder().decode(decodeBase64(answer.daemonState)))
+                        : decrypt(this.machine.encryptionKey, this.machine.encryptionVariant, decodeBase64(answer.daemonState));
                 }
                 throw new Error('Daemon state version mismatch'); // Triggers retry
             }

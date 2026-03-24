@@ -1,0 +1,89 @@
+# Happy Coder 语音输入双轨架构改造方案
+
+## 一、当前原生语音通话架构（ElevenLabs + LiveKit）
+
+目前 Happy Coder (`packages/happy-app`) 的语音功能被设计为一种“双向实时通话（Conversational AI）”体验，主要依赖以下组件：
+
+### 1. 核心依赖
+- `@elevenlabs/react` & `@elevenlabs/react-native`: 提供与 ElevenLabs 的 WebRTC 实时通信能力。
+- `@livekit/react-native`: 底层音视频流传输引擎（依赖移动端原生库，在 Web 浏览器环境下会导致静默失败）。
+- `react-native-audio-api`: 麦克风权限与音频基础处理。
+
+### 2. 执行流程
+1. **触发**: 用户点击 `AgentInput.tsx` 右下角的麦克风按钮。
+2. **权限**: `requestMicrophonePermission()` 获取操作系统麦克风权限。
+3. **鉴权 (Server)**: 前端通过 `fetchVoiceToken` 请求 `POST /v1/voice/token`。后端携带服务器的 `ELEVENLABS_API_KEY` 向 ElevenLabs 换取一次性对话 Token。
+4. **连接**: 前端拿到 Token 和 Agent ID 后，调用 `voiceSession.startSession()` 建立 WebRTC 长连接。
+5. **交互**: 用户的声音流式传给 ElevenLabs，ElevenLabs 识别并交给大模型处理后，将合成的音频流式传回手机播放。
+
+**存在的问题**：
+1. **成本高昂**：极度依赖付费的 ElevenLabs 额度。
+2. **平台受限**：由于 LiveKit React Native 插件限制，Web 浏览器端无法使用，点击按钮无响应。
+3. **交互过重**：程序员在编码时，通常只需要“语音输入文字”，不需要 AI 用语音播报代码。
+
+---
+
+## 二、自定义流式 ASR（语音转文字）替代方案设计
+
+为了解决上述痛点，我们计划引入一套**“流式录音 -> 云端 ASR 识别 -> 文本自动填充”**的轻量级方案（类似 Trae IDE 的语音输入）。
+
+### 1. 技术选型
+- **前端录音**: 弃用 LiveKit，改用原生的 `Web Audio API` (AudioWorklet) 或 `MediaRecorder`，确保 Web 和 App 跨平台兼容。
+- **传输协议**: `WebSocket` 双向长连接，用于流式发送音频切片（PCM数据）并接收实时文字流。
+- **ASR 引擎**: 对接国内大厂（如阿里云、火山引擎）的实时语音识别 WebSocket API，或者接入开源的 Whisper 模型接口（极低成本/免费）。
+
+### 2. 交互体验（打字机效果）
+1. 用户按住/点击新的麦克风按钮，UI 变为“正在聆听...”状态。
+2. 前端每隔 100ms 将麦克风捕获的 PCM 音频块通过 Socket 发给 Server。
+3. Server 转发给云端 ASR 引擎。
+4. Server 收到 ASR 引擎返回的中间识别结果（如：“帮我”、“帮我写一个”、“帮我写一个图片上传功能”），通过 Socket 实时推给前端。
+5. 前端实时更新聊天输入框的文本值。
+6. 用户确认文字无误后，手动点击发送。
+
+---
+
+## 三、双轨配置项改造计划（UI & State）
+
+为了兼顾不同用户的需求，我们不直接删除旧方案，而是将其做成一个可切换的配置项。
+
+### 1. 状态管理 (`sync/storage.ts`)
+在 `settings` 中新增配置项：
+```typescript
+interface Settings {
+    // ... existing settings
+    voiceInputMode: 'elevenlabs_call' | 'streaming_asr'; // 新增
+}
+```
+默认值：在 App 端默认为 `elevenlabs_call`，在 Web 端默认为 `streaming_asr`。
+
+### 2. UI 设置页 (`app/(app)/settings/index.tsx`)
+在设置界面新增一个下拉选择器 **"语音输入模式 (Voice Input Mode)"**：
+- 选项 A：**原生实时通话 (ElevenLabs)** - 提示“需要配置 API Key，支持双向语音对话”。
+- 选项 B：**极速语音转文字 (ASR)** - 提示“免费，边说边出字，适合 Web 和桌面端”。
+
+### 3. 输入框逻辑分发 (`components/AgentInput.tsx`)
+重构麦克风按钮的 `onPress` 事件：
+```javascript
+const handleVoicePress = () => {
+    if (settings.voiceInputMode === 'elevenlabs_call') {
+        // 走原来的 RealtimeSession 逻辑
+        startRealtimeSession();
+    } else {
+        // 走新的 ASR 录音逻辑
+        startStreamingASR();
+    }
+}
+```
+
+### 4. 后端路由扩充 (`routes/v1/voiceRoutes.ts` 或新建 WebSocket 命名空间)
+- 保留原有的 `/v1/voice/token` 接口。
+- 新增 `/v1/asr/stream` WebSocket 路由，专门负责接收前端 PCM 音频流，并将其代理给阿里云/火山引擎的 WSS 接口。
+
+---
+
+## 四、实施步骤建议
+
+1. **注册与鉴权**：确定使用的 ASR 引擎（如阿里云），获取 API Key，并在 `packages/happy-server/.env` 中配置。
+2. **后端代理实现**：在 Server 端编写 WebSocket 代理逻辑，跑通与大厂 ASR 引擎的流式交互。
+3. **前端录音模块**：在 `happy-app` 中封装一个跨平台的音频切片录制 Hook（`useAudioStream`）。
+4. **UI 与配置联调**：增加 Settings 开关，替换输入框按钮逻辑，实现“边说边出字”的文本回填效果。

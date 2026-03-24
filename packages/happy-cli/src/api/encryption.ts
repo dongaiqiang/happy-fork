@@ -178,6 +178,14 @@ export function decryptWithDataKey(bundle: Uint8Array, dataKey: Uint8Array): any
 }
 
 export function encrypt(key: Uint8Array, variant: 'legacy' | 'dataKey', data: any): Uint8Array {
+  // --- PLAINTEXT MODE BYPASS ---
+  if (process.env.ENABLE_PLAINTEXT_MODE === 'true') {
+    // We add a magic prefix "PLAINTEXT:" so the decryptor knows not to decrypt
+    const jsonStr = JSON.stringify(data);
+    return new TextEncoder().encode(`PLAINTEXT:${jsonStr}`);
+  }
+  // -----------------------------
+
   if (variant === 'legacy') {
     return encryptLegacy(data, key);
   } else {
@@ -186,6 +194,51 @@ export function encrypt(key: Uint8Array, variant: 'legacy' | 'dataKey', data: an
 }
 
 export function decrypt(key: Uint8Array, variant: 'legacy' | 'dataKey', data: Uint8Array): any | null {
+  // --- PLAINTEXT MODE BYPASS ---
+  const isPlaintextMode = process.env.ENABLE_PLAINTEXT_MODE === 'true';
+  
+  if (isPlaintextMode) {
+      try {
+          const jsonStr = new TextDecoder().decode(data);
+          // Just like we did in RpcHandlerManager, we should strip any 'PLAINTEXT:' prefix
+          const jsonStartIndex = Math.max(jsonStr.indexOf('{'), jsonStr.indexOf('['));
+          if (jsonStartIndex !== -1) {
+              const cleanJsonStr = jsonStr.substring(jsonStartIndex);
+              return JSON.parse(cleanJsonStr);
+          }
+      } catch (e) {
+          // If pure json parsing fails, fallback to normal decrypt just in case
+      }
+  }
+
+  // Also check if data starts with "PLAINTEXT:" (which is 10 bytes) for older mode support
+  if (data.length > 10) {
+    const prefix = new TextDecoder().decode(data.slice(0, 10));
+    if (prefix === 'PLAINTEXT:') {
+      try {
+        const jsonStr = new TextDecoder().decode(data.slice(10));
+        return JSON.parse(jsonStr);
+      } catch (e) {
+        console.error('Failed to parse plaintext payload', e);
+        // Fall through to normal decryption instead of returning null
+      }
+    }
+    
+    // Web app often sends data with a null byte prefix for versioning (\x00PLAINTEXT:...)
+    if (data[0] === 0 && data.length > 11) {
+        const prefixWithNull = new TextDecoder().decode(data.slice(1, 11));
+        if (prefixWithNull === 'PLAINTEXT:') {
+            try {
+                const jsonStr = new TextDecoder().decode(data.slice(11));
+                return JSON.parse(jsonStr);
+            } catch (e) {
+                console.error('Failed to parse plaintext payload with null byte', e);
+            }
+        }
+    }
+  }
+  // -----------------------------
+
   if (variant === 'legacy') {
     return decryptLegacy(data, key);
   } else {
@@ -201,6 +254,16 @@ export function authChallenge(secret: Uint8Array): {
   publicKey: Uint8Array
   signature: Uint8Array
 } {
+  // --- PLAINTEXT MODE BYPASS ---
+  if (process.env.ENABLE_PLAINTEXT_MODE === 'true') {
+      return {
+          challenge: new Uint8Array(32),
+          publicKey: new Uint8Array(32),
+          signature: new Uint8Array(64)
+      };
+  }
+  // -----------------------------
+
   const keypair = tweetnacl.sign.keyPair.fromSeed(secret);
   const challenge = getRandomBytes(32);
   const signature = tweetnacl.sign.detached(challenge, keypair.secretKey);

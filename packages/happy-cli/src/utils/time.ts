@@ -38,4 +38,8 @@ export function createBackoff(
     };
 }
 
-export let backoff = createBackoff();
+export let backoff = createBackoff({
+    onError: (e, failuresCount) => {
+        console.error(`Backoff retry ${failuresCount} after error:`, e);
+    }
+});

@@ -30,10 +30,30 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
         try {
             const tail = url.slice('happy://terminal?'.length);
             const publicKey = decodeBase64(tail, 'base64url');
-            const responseV1 = encryptBox(decodeBase64(auth.credentials!.secret, 'base64url'), publicKey);
-            let responseV2Bundle = new Uint8Array(sync.encryption.contentDataKey.length + 1);
-            responseV2Bundle[0] = 0;
-            responseV2Bundle.set(sync.encryption.contentDataKey, 1);
+            
+            // --- PLAINTEXT MODE BYPASS ---
+            let secretBytes: Uint8Array;
+            if (process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true') {
+                secretBytes = new Uint8Array(32); // Use empty bytes in plaintext mode
+            } else {
+                secretBytes = decodeBase64(auth.credentials!.secret, 'base64url');
+            }
+            // -----------------------------
+
+            const responseV1 = encryptBox(secretBytes, publicKey);
+            
+            // In plaintext mode, sync.encryption might not be fully initialized yet
+            // when creating a new account. We just need to pass something valid-looking.
+            let responseV2Bundle: Uint8Array;
+            if (process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true') {
+                responseV2Bundle = new Uint8Array(33); // 1 byte version (0) + 32 bytes dummy key
+                responseV2Bundle[0] = 0;
+            } else {
+                responseV2Bundle = new Uint8Array(sync.encryption.contentDataKey.length + 1);
+                responseV2Bundle[0] = 0;
+                responseV2Bundle.set(sync.encryption.contentDataKey, 1);
+            }
+            
             const responseV2 = encryptBox(responseV2Bundle, publicKey);
             await authApprove(auth.credentials!.token, publicKey, responseV1, responseV2);
             
@@ -44,9 +64,12 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
                 }
             ]);
             return true;
-        } catch (e) {
-            console.error(e);
-            Modal.alert(t('common.error'), t('modals.failedToConnectTerminal'), [{ text: t('common.ok') }]);
+        } catch (e: any) {
+            console.error('Failed to process auth URL:', e);
+            if (e.response) {
+                console.error('Server response error:', e.response.data);
+            }
+            Modal.alert(t('common.error'), t('modals.failedToConnectTerminal') + (e.message ? `: ${e.message}` : ''), [{ text: t('common.ok') }]);
             options?.onError?.(e);
             return false;
         } finally {

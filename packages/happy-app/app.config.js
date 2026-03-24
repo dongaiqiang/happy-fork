@@ -1,13 +1,13 @@
 const variant = process.env.APP_ENV || 'development';
 const name = {
-    development: "Happy (dev)",
-    preview: "Happy (preview)",
-    production: "Happy"
+    development: "easycode (dev)",
+    preview: "easycode (preview)",
+    production: "easycode"
 }[variant];
 const bundleId = {
-    development: "com.slopus.happy.dev",
-    preview: "com.slopus.happy.preview",
-    production: "com.ex3ndr.happy"
+    development: "com.easycode.app.dev",
+    preview: "com.easycode.app.preview",
+    production: "com.easycode.app"
 }[variant];
 
 export default {
@@ -163,7 +163,7 @@ export default {
                 root: "./sources/app"
             },
             eas: {
-                projectId: "4558dd3d-cd5a-47cd-bad9-e591a241cc06"
+                projectId: "dabee7ae-e79f-44ec-a548-d42d2faf82d0"
             },
             app: {
                 postHogKey: process.env.EXPO_PUBLIC_POSTHOG_API_KEY,
@@ -171,7 +171,6 @@ export default {
                 revenueCatGoogleKey: process.env.EXPO_PUBLIC_REVENUE_CAT_GOOGLE,
                 revenueCatStripeKey: process.env.EXPO_PUBLIC_REVENUE_CAT_STRIPE
             }
-        },
-        owner: "bulkacorp"
+        }
     }
 };

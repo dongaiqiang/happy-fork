@@ -12,6 +12,7 @@ import { sessionUpdateHandler } from "./socket/sessionUpdateHandler";
 import { machineUpdateHandler } from "./socket/machineUpdateHandler";
 import { artifactUpdateHandler } from "./socket/artifactUpdateHandler";
 import { accessKeyHandler } from "./socket/accessKeyHandler";
+import { asrHandler } from "./socket/asrHandler";
 
 export function startSocket(app: Fastify) {
     const io = new Server(app.server, {
@@ -62,15 +63,23 @@ export function startSocket(app: Fastify) {
             return;
         }
 
-        const verified = await auth.verifyToken(token);
-        if (!verified) {
-            log({ module: 'websocket' }, `Invalid token provided`);
-            socket.emit('error', { message: 'Invalid authentication token' });
-            socket.disconnect();
-            return;
+        // --- 本地开发测试的鉴权后门 (Dev Token Bypass) ---
+        let userId: string;
+        if (process.env.NODE_ENV === 'development' && token === 'dev-token-for-asr-test') {
+            userId = 'test-user-id';
+            log({ module: 'websocket' }, `[DEV BYPASS] Using dev token for ASR test. Assigned userId: ${userId}`);
+        } else {
+            const verified = await auth.verifyToken(token);
+            if (!verified) {
+                log({ module: 'websocket' }, `Invalid token provided`);
+                socket.emit('error', { message: 'Invalid authentication token' });
+                socket.disconnect();
+                return;
+            }
+            userId = verified.userId;
         }
+        // --------------------------------------------------
 
-        const userId = verified.userId;
         log({ module: 'websocket' }, `Token verified: ${userId}, clientType: ${clientType || 'user-scoped'}, sessionId: ${sessionId || 'none'}, machineId: ${machineId || 'none'}, socketId: ${socket.id}`);
 
         // Store connection based on type
@@ -144,6 +153,7 @@ export function startSocket(app: Fastify) {
         machineUpdateHandler(userId, socket);
         artifactUpdateHandler(userId, socket);
         accessKeyHandler(userId, socket);
+        asrHandler(userId, socket);
 
         // Ready
         log({ module: 'websocket' }, `User connected: ${userId}`);

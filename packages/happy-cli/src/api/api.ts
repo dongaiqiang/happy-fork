@@ -177,12 +177,22 @@ export class ApiClient {
 
     // Create machine
     try {
+      // --- PLAINTEXT MODE BYPASS ---
+      const isPlaintextMode = process.env.ENABLE_PLAINTEXT_MODE === 'true';
+      const encryptedMetadata = isPlaintextMode 
+        ? encodeBase64(new TextEncoder().encode(JSON.stringify(opts.metadata)))
+        : encodeBase64(encrypt(encryptionKey, encryptionVariant, opts.metadata));
+      const encryptedDaemonState = opts.daemonState 
+        ? (isPlaintextMode ? encodeBase64(new TextEncoder().encode(JSON.stringify(opts.daemonState))) : encodeBase64(encrypt(encryptionKey, encryptionVariant, opts.daemonState)))
+        : undefined;
+      // -----------------------------
+
       const response = await axios.post(
         `${configuration.serverUrl}/v1/machines`,
         {
           id: opts.machineId,
-          metadata: encodeBase64(encrypt(encryptionKey, encryptionVariant, opts.metadata)),
-          daemonState: opts.daemonState ? encodeBase64(encrypt(encryptionKey, encryptionVariant, opts.daemonState)) : undefined,
+          metadata: encryptedMetadata,
+          daemonState: encryptedDaemonState,
           dataEncryptionKey: dataEncryptionKey ? encodeBase64(dataEncryptionKey) : undefined
         },
         {
@@ -203,9 +213,9 @@ export class ApiClient {
         id: raw.id,
         encryptionKey: encryptionKey,
         encryptionVariant: encryptionVariant,
-        metadata: raw.metadata ? decrypt(encryptionKey, encryptionVariant, decodeBase64(raw.metadata)) : null,
+        metadata: raw.metadata ? (isPlaintextMode ? JSON.parse(new TextDecoder().decode(decodeBase64(raw.metadata))) : decrypt(encryptionKey, encryptionVariant, decodeBase64(raw.metadata))) : null,
         metadataVersion: raw.metadataVersion || 0,
-        daemonState: raw.daemonState ? decrypt(encryptionKey, encryptionVariant, decodeBase64(raw.daemonState)) : null,
+        daemonState: raw.daemonState ? (isPlaintextMode ? JSON.parse(new TextDecoder().decode(decodeBase64(raw.daemonState))) : decrypt(encryptionKey, encryptionVariant, decodeBase64(raw.daemonState))) : null,
         daemonStateVersion: raw.daemonStateVersion || 0,
       };
       return machine;
