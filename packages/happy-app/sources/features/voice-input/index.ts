@@ -1,3 +1,3 @@
 export { useVoiceInputController } from './useVoiceInputController';
-export { resolveVoiceInputMode, decideVoiceButton, useLegacyVoiceProvider, useStreamingAsrProvider } from './providers';
-export type { VoiceInputMode, VoiceButtonState, VoiceButtonDecision, StreamingAsrProviderProps } from './providers';
+export { resolveVoiceInputMode, getVoiceModeStrategy, decideVoiceButton, useLegacyVoiceProvider, useStreamingAsrProvider } from './providers';
+export type { VoiceInputMode, VoiceButtonState, VoiceButtonDecision, VoiceModeStrategy, StreamingAsrProviderProps } from './providers';

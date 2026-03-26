@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decideVoiceButton, resolveVoiceInputMode } from './providerFactory';
+import { decideVoiceButton, getVoiceModeStrategy, resolveVoiceInputMode } from './providerFactory';
 
 describe('resolveVoiceInputMode', () => {
     it('returns streaming_asr for streaming mode', () => {
@@ -77,5 +77,15 @@ describe('decideVoiceButton', () => {
             showSendButton: false,
             showLegacyMicButton: false
         });
+    });
+});
+
+describe('getVoiceModeStrategy', () => {
+    it('returns streaming strategy for streaming mode', () => {
+        expect(getVoiceModeStrategy('streaming_asr').mode).toBe('streaming_asr');
+    });
+
+    it('returns fallback strategy for unknown mode', () => {
+        expect(getVoiceModeStrategy('other').mode).toBe('elevenlabs_call');
     });
 });

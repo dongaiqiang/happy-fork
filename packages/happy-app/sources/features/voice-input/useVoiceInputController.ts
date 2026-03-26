@@ -1,5 +1,5 @@
 import { useLocalSetting } from '@/sync/storage';
-import { decideVoiceButton, resolveVoiceInputMode, useLegacyVoiceProvider } from './providers';
+import { getVoiceModeStrategy, resolveVoiceInputMode, useLegacyVoiceProvider } from './providers';
 
 interface UseVoiceInputControllerProps {
     hasText: boolean;
@@ -16,8 +16,9 @@ interface UseVoiceInputControllerProps {
 export function useVoiceInputController(props: UseVoiceInputControllerProps) {
     const systemVoiceInputMode = useLocalSetting('voiceInputMode');
     const voiceInputMode = resolveVoiceInputMode(props.forceMode || systemVoiceInputMode);
+    const modeStrategy = getVoiceModeStrategy(voiceInputMode);
 
-    const buttonDecision = decideVoiceButton(voiceInputMode, {
+    const buttonDecision = modeStrategy.decideButton({
         hasText: props.hasText,
         isSending: props.isSending,
         hasMicAction: !!props.onMicPress,
@@ -35,6 +36,7 @@ export function useVoiceInputController(props: UseVoiceInputControllerProps) {
     });
 
     return {
+        voiceInputMode,
         buttonDecision,
         legacyVoice,
         customAsrProps: {

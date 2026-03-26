@@ -12,3 +12,8 @@ export interface VoiceButtonDecision {
     showSendButton: boolean;
     showLegacyMicButton: boolean;
 }
+
+export interface VoiceModeStrategy {
+    mode: VoiceInputMode;
+    decideButton: (state: VoiceButtonState) => VoiceButtonDecision;
+}
