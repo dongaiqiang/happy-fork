@@ -1100,17 +1100,33 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                                 </View>
 
                                 {/* Send/Voice button - aligned with first row */}
-                                <SmartVoiceButton
-                                    hasText={hasText}
-                                    isSending={props.isSending}
-                                    isSendDisabled={props.isSendDisabled}
-                                    onSend={props.onSend}
-                                    onMicPress={props.onMicPress}
-                                    isMicActive={props.isMicActive}
-                                    styles={styles}
-                                    sessionId={props.sessionId}
-                                    onTextUpdate={props.onChangeText}
-                                />
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <SmartVoiceButton
+                                        hasText={false}
+                                        isSending={false}
+                                        isSendDisabled={false}
+                                        onSend={() => {}}
+                                        onMicPress={props.onMicPress} // The native elevenlabs mic
+                                        isMicActive={props.isMicActive}
+                                        styles={styles}
+                                        sessionId={props.sessionId}
+                                        onTextUpdate={() => {}}
+                                        forceMode="elevenlabs_call"
+                                    />
+                                    <View style={{ width: 8 }} />
+                                    <SmartVoiceButton
+                                        hasText={hasText}
+                                        isSending={props.isSending}
+                                        isSendDisabled={props.isSendDisabled}
+                                        onSend={props.onSend}
+                                        onMicPress={props.onMicPress}
+                                        isMicActive={props.isMicActive}
+                                        styles={styles}
+                                        sessionId={props.sessionId}
+                                        onTextUpdate={props.onChangeText}
+                                        forceMode="streaming_asr"
+                                    />
+                                </View>
                             </View>
                         </View>
                     </View>

@@ -21,6 +21,10 @@
             "**/react-dom",
             "**/react-native",
             "**/react-native/**",
+            "**/expo-dev-menu",
+            "**/expo-dev-menu/**",
+            "**/expo-dev-launcher",
+            "**/expo-dev-launcher/**",
             "**/react-native-edge-to-edge/**",
             "**/react-native-incall-manager/**"
         ]

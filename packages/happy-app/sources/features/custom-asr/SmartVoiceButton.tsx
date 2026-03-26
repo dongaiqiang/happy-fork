@@ -17,16 +17,19 @@ interface SmartVoiceButtonProps {
     styles: any;
     sessionId?: string;
     onTextUpdate?: (text: string) => void;
+    forceMode?: 'elevenlabs_call' | 'streaming_asr';
 }
 
 export const SmartVoiceButton = React.memo((props: SmartVoiceButtonProps) => {
     const { theme } = useUnistyles();
-    const voiceInputMode = useLocalSetting('voiceInputMode');
+    const systemVoiceInputMode = useLocalSetting('voiceInputMode');
+    const voiceInputMode = props.forceMode || systemVoiceInputMode;
+    const isStreamingMode = voiceInputMode === 'streaming_asr';
     
     // The original logic for Send/ElevenLabs:
     const showSend = props.hasText || props.isSending;
     const showElevenLabsMic = !showSend && props.onMicPress && !props.isMicActive && voiceInputMode === 'elevenlabs_call';
-    const showAsrMic = !showSend && voiceInputMode === 'streaming_asr';
+    const showAsrMic = isStreamingMode;
     
     if (showAsrMic) {
         return (
@@ -34,6 +37,10 @@ export const SmartVoiceButton = React.memo((props: SmartVoiceButtonProps) => {
                 styles={props.styles} 
                 onTextUpdate={props.onTextUpdate}
                 sessionId={props.sessionId}
+                hasText={props.hasText}
+                isSending={props.isSending}
+                isSendDisabled={props.isSendDisabled}
+                onSend={props.onSend}
             />
         );
     }

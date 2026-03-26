@@ -97,5 +97,9 @@ export function loadAppConfig(): AppConfig {
         config.serverUrl = process.env.EXPO_PUBLIC_SERVER_URL;
     }
 
+    // 强制写入你申请的 ElevenLabs Agent ID
+    config.elevenLabsAgentIdDev = "agent_4501kmj3nex0e4ebp0m51m57yqc2";
+    config.elevenLabsAgentIdProd = "agent_4501kmj3nex0e4ebp0m51m57yqc2";
+
     return config as AppConfig;
 }

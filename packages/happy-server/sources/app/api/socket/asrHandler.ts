@@ -6,6 +6,43 @@ import WebSocket from "ws";
 export function asrHandler(userId: string, socket: Socket) {
     let xfWs: WebSocket | null = null;
     let isFirstFrame = true;
+    let chunkCount = 0;
+
+    const toBase64Audio = (data: {
+        audioBase64?: string;
+        chunk?: Buffer | ArrayBuffer | Uint8Array | number[] | { type: "Buffer"; data: number[] };
+    }) => {
+        if (typeof data.audioBase64 === "string" && data.audioBase64.length > 0) {
+            return data.audioBase64;
+        }
+
+        const chunk = data.chunk as any;
+        if (!chunk) {
+            return "";
+        }
+
+        if (Buffer.isBuffer(chunk)) {
+            return chunk.toString("base64");
+        }
+
+        if (chunk instanceof ArrayBuffer) {
+            return Buffer.from(new Uint8Array(chunk)).toString("base64");
+        }
+
+        if (chunk instanceof Uint8Array) {
+            return Buffer.from(chunk).toString("base64");
+        }
+
+        if (Array.isArray(chunk)) {
+            return Buffer.from(chunk).toString("base64");
+        }
+
+        if (chunk.type === "Buffer" && Array.isArray(chunk.data)) {
+            return Buffer.from(chunk.data).toString("base64");
+        }
+
+        return "";
+    };
 
     // 监听前端发来的 ASR 开始指令
     socket.on("asr_start", async (data: { sessionId: string }) => {
@@ -27,6 +64,7 @@ export function asrHandler(userId: string, socket: Socket) {
         }
 
         isFirstFrame = true;
+        chunkCount = 0;
 
         // 生成鉴权 URL
         const date = new Date().toUTCString();
@@ -124,14 +162,26 @@ export function asrHandler(userId: string, socket: Socket) {
     });
 
     // 接收前端发送的 PCM 音频切片 (16kHz, 16bit, mono)
-    socket.on("asr_audio_chunk", (data: { chunk: Buffer }) => {
+    socket.on("asr_audio_chunk", (data: {
+        audioBase64?: string;
+        chunk?: Buffer | ArrayBuffer | Uint8Array | number[] | { type: "Buffer"; data: number[] };
+        chunkByteLength?: number;
+    }) => {
         if (!xfWs || xfWs.readyState !== WebSocket.OPEN) {
             log({ module: 'asr', level: 'warn' }, `[ASR] 收到音频块，但讯飞 WebSocket 未连接！`);
             return;
         }
 
-        const base64Audio = data.chunk.toString('base64');
-        log({ module: 'asr' }, `[ASR] 收到前端音频块，大小: ${data.chunk.byteLength} bytes`);
+        const base64Audio = toBase64Audio(data);
+        if (!base64Audio) {
+            log({ module: 'asr', level: 'warn' }, `[ASR] 收到空音频块，已跳过`);
+            return;
+        }
+
+        chunkCount += 1;
+        if (chunkCount % 50 === 1) {
+            log({ module: 'asr' }, `[ASR] 收到前端音频块 #${chunkCount}，大小: ${data.chunkByteLength ?? 0} bytes`);
+        }
         const APPID = process.env.IFLYTEK_APPID;
 
         const reqData: any = {
@@ -150,9 +200,9 @@ export function asrHandler(userId: string, socket: Socket) {
                 domain: "iat", // 默认为日常用语 iat。可选：medical(医疗), gov(政务) 等。古诗词没有专用领域。
                 accent: "mandarin",
                 vinfo: 1,
-                vad_eos: 10000, 
-                dwa: "wpgs",    
-                ptt: 1          // 把标点加回来，因为彻底无标点也影响阅读。
+                vad_eos: 10000, // 增加尾端静音超时时间到最大值 (10秒)
+                dwa: "wpgs",    // 开启动态修正
+                ptt: 0          // 【核心修改】强制关闭标点符号！因为加标点容易让引擎提前判定句子结束并挂断
             };
             isFirstFrame = false;
         }
