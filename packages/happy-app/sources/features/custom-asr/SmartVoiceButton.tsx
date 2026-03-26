@@ -2,10 +2,10 @@ import * as React from 'react';
 import { Platform, Pressable, View, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { Octicons } from '@expo/vector-icons';
-import { useLocalSetting } from '@/sync/storage';
 import { useUnistyles } from 'react-native-unistyles';
 import { hapticsLight } from '@/components/haptics';
 import { CustomASRButton } from './CustomASRButton';
+import { useVoiceInputController } from '@/features/voice-input';
 
 interface SmartVoiceButtonProps {
     hasText: boolean;
@@ -22,25 +22,28 @@ interface SmartVoiceButtonProps {
 
 export const SmartVoiceButton = React.memo((props: SmartVoiceButtonProps) => {
     const { theme } = useUnistyles();
-    const systemVoiceInputMode = useLocalSetting('voiceInputMode');
-    const voiceInputMode = props.forceMode || systemVoiceInputMode;
-    const isStreamingMode = voiceInputMode === 'streaming_asr';
+    const { buttonDecision, legacyVoice, customAsrProps } = useVoiceInputController({
+        hasText: props.hasText,
+        isSending: props.isSending,
+        isSendDisabled: props.isSendDisabled,
+        onSend: props.onSend,
+        onMicPress: props.onMicPress,
+        isMicActive: props.isMicActive,
+        sessionId: props.sessionId,
+        onTextUpdate: props.onTextUpdate,
+        forceMode: props.forceMode
+    });
     
-    // The original logic for Send/ElevenLabs:
-    const showSend = props.hasText || props.isSending;
-    const showElevenLabsMic = !showSend && props.onMicPress && !props.isMicActive && voiceInputMode === 'elevenlabs_call';
-    const showAsrMic = isStreamingMode;
-    
-    if (showAsrMic) {
+    if (buttonDecision.showStreamingAsrButton) {
         return (
             <CustomASRButton 
                 styles={props.styles} 
-                onTextUpdate={props.onTextUpdate}
-                sessionId={props.sessionId}
-                hasText={props.hasText}
-                isSending={props.isSending}
-                isSendDisabled={props.isSendDisabled}
-                onSend={props.onSend}
+                onTextUpdate={customAsrProps.onTextUpdate}
+                sessionId={customAsrProps.sessionId}
+                hasText={customAsrProps.hasText}
+                isSending={customAsrProps.isSending}
+                isSendDisabled={customAsrProps.isSendDisabled}
+                onSend={customAsrProps.onSend}
             />
         );
     }
@@ -49,7 +52,7 @@ export const SmartVoiceButton = React.memo((props: SmartVoiceButtonProps) => {
         <View
             style={[
                 props.styles.sendButton,
-                (showSend || showElevenLabsMic || (props.onMicPress && !props.isMicActive))
+                (buttonDecision.showSendButton || buttonDecision.showLegacyMicButton)
                     ? props.styles.sendButtonActive
                     : props.styles.sendButtonInactive
             ]}
@@ -65,20 +68,16 @@ export const SmartVoiceButton = React.memo((props: SmartVoiceButtonProps) => {
                 hitSlop={{ top: 5, bottom: 10, left: 0, right: 0 }}
                 onPress={() => {
                     hapticsLight();
-                    if (props.hasText) {
-                        props.onSend();
-                    } else if (props.onMicPress) {
-                        props.onMicPress();
-                    }
+                    legacyVoice.onPress();
                 }}
-                disabled={props.isSendDisabled || props.isSending || (!props.hasText && !props.onMicPress)}
+                disabled={legacyVoice.disabled}
             >
-                {props.isSending ? (
+                {legacyVoice.iconType === 'sending' ? (
                     <ActivityIndicator
                         size="small"
                         color={theme.colors.button.primary.tint}
                     />
-                ) : (props.hasText || props.isMicActive) ? (
+                ) : legacyVoice.iconType === 'send' ? (
                     <Octicons
                         name="arrow-up"
                         size={16}
@@ -88,7 +87,7 @@ export const SmartVoiceButton = React.memo((props: SmartVoiceButtonProps) => {
                             { marginTop: Platform.OS === 'web' ? 2 : 0 }
                         ]}
                     />
-                ) : props.onMicPress && !props.isMicActive ? (
+                ) : (
                     <Image
                         source={require('@/assets/images/icon-voice-white.png')}
                         style={{
@@ -96,16 +95,6 @@ export const SmartVoiceButton = React.memo((props: SmartVoiceButtonProps) => {
                             height: 24,
                         }}
                         tintColor={theme.colors.button.primary.tint}
-                    />
-                ) : (
-                    <Octicons
-                        name="arrow-up"
-                        size={16}
-                        color={theme.colors.button.primary.tint}
-                        style={[
-                            props.styles.sendButtonIcon,
-                            { marginTop: Platform.OS === 'web' ? 2 : 0 }
-                        ]}
                     />
                 )}
             </Pressable>
