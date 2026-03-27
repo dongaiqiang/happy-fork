@@ -220,6 +220,8 @@ export async function startDaemon(): Promise<void> {
       logger.debugLargeJson('[DAEMON RUN] Spawning session', options);
 
       const { directory, sessionId, machineId, approvedNewDirectoryCreation = true } = options;
+      const resumeSessionId = typeof sessionId === 'string' && sessionId.trim() ? sessionId.trim() : undefined;
+      const selectedAgent = options.agent === 'gemini' ? 'gemini' : (options.agent === 'codex' ? 'codex' : 'claude');
       let directoryCreated = false;
 
       try {
@@ -266,6 +268,12 @@ export async function startDaemon(): Promise<void> {
       }
 
       try {
+        if (resumeSessionId && selectedAgent !== 'claude') {
+          return {
+            type: 'error',
+            errorMessage: `Session resume is currently supported only for Claude sessions, received agent '${selectedAgent}'.`
+          };
+        }
 
         // Build environment variables with explicit precedence layers:
         // Layer 1 (base): Authentication tokens - protected, cannot be overridden
@@ -387,15 +395,14 @@ export async function startDaemon(): Promise<void> {
           // Construct command for the CLI
           const cliPath = join(projectPath(), 'dist', 'index.mjs');
           // Determine agent command - support claude, codex, and gemini
-          const agent = options.agent === 'gemini' ? 'gemini' : (options.agent === 'codex' ? 'codex' : 'claude');
-          const fullCommand = `node --no-warnings --no-deprecation ${cliPath} ${agent} --happy-starting-mode remote --started-by daemon`;
+          const fullCommand = `node --no-warnings --no-deprecation ${cliPath} ${selectedAgent} --happy-starting-mode remote --started-by daemon${resumeSessionId ? ` --resume ${resumeSessionId}` : ''}`;
 
           // Spawn in tmux with environment variables
           // IMPORTANT: Pass complete environment (process.env + extraEnv) because:
           // 1. tmux sessions need daemon's expanded auth variables (e.g., ANTHROPIC_AUTH_TOKEN)
           // 2. Regular spawn uses env: { ...process.env, ...extraEnv }
           // 3. tmux needs explicit environment via -e flags to ensure all variables are available
-          const windowName = `happy-${Date.now()}-${agent}`;
+          const windowName = `happy-${Date.now()}-${selectedAgent}`;
           const tmuxEnv: Record<string, string> = {};
 
           // Add all daemon environment variables (filtering out undefined)
@@ -494,9 +501,9 @@ export async function startDaemon(): Promise<void> {
             '--happy-starting-mode', 'remote',
             '--started-by', 'daemon'
           ];
-
-          // TODO: In future, sessionId could be used with --resume to continue existing sessions
-          // For now, we ignore it - each spawn creates a new session
+          if (resumeSessionId) {
+            args.push('--resume', resumeSessionId);
+          }
           const happyProcess = spawnHappyCLI(args, {
             cwd: directory,
             detached: true,  // Sessions stay alive when daemon stops

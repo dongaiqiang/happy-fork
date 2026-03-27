@@ -7,11 +7,11 @@ import { Item } from '@/components/Item';
 import { ItemGroup } from '@/components/ItemGroup';
 import { ItemList } from '@/components/ItemList';
 import { Avatar } from '@/components/Avatar';
-import { useSession, useIsDataReady } from '@/sync/storage';
+import { storage, useSession, useIsDataReady, useMachine, useAllMachines } from '@/sync/storage';
 import { getSessionName, useSessionStatus, formatOSPlatform, formatPathRelativeToHome, getSessionAvatarId } from '@/utils/sessionUtils';
 import * as Clipboard from 'expo-clipboard';
 import { Modal } from '@/modal';
-import { sessionKill, sessionDelete } from '@/sync/ops';
+import { machineSpawnNewSession, sessionKill, sessionDelete } from '@/sync/ops';
 import { useUnistyles } from 'react-native-unistyles';
 import { layout } from '@/components/layout';
 import { t } from '@/text';
@@ -20,6 +20,8 @@ import { CodeView } from '@/components/CodeView';
 import { Session } from '@/sync/storageTypes';
 import { useHappyAction } from '@/hooks/useHappyAction';
 import { HappyError } from '@/utils/errors';
+import { isMachineOnline } from '@/utils/machineUtils';
+import { sync } from '@/sync/sync';
 
 // Animated status dot component
 function StatusDot({ color, isPulsing, size = 8 }: { color: string; isPulsing?: boolean; size?: number }) {
@@ -126,6 +128,8 @@ function SessionInfoContent({ session }: { session: Session }) {
     const devModeEnabled = __DEV__;
     const sessionName = getSessionName(session);
     const sessionStatus = useSessionStatus(session);
+    const machine = useMachine(session.metadata?.machineId ?? '');
+    const allMachines = useAllMachines();
     
     // Check if CLI version is outdated
     const isCliOutdated = session.metadata?.version && !isVersionSupported(session.metadata.version, MINIMUM_CLI_VERSION);
@@ -199,6 +203,90 @@ function SessionInfoContent({ session }: { session: Session }) {
             ]
         );
     }, [performDelete]);
+
+    const resumeSession = useCallback(async (approvedNewDirectoryCreation: boolean = false) => {
+        const machineId = session.metadata?.machineId;
+        const directory = session.metadata?.path;
+        const claudeSessionId = session.metadata?.claudeSessionId;
+        const sessionHost = session.metadata?.host;
+        const sessionHomeDir = session.metadata?.homeDir;
+        if (!machineId || !directory || !claudeSessionId) {
+            Modal.alert(t('common.error'), 'This session cannot be resumed because required metadata is missing.');
+            return;
+        }
+        await sync.refreshMachines();
+        const latestMachines = Object.values(storage.getState().machines);
+        const visibleMachines = latestMachines.length > 0 ? latestMachines : allMachines;
+        const onlineMachinesWithEncryption = visibleMachines.filter((candidate) => (
+            isMachineOnline(candidate) && !!sync.encryption.getMachineEncryption(candidate.id)
+        ));
+        const exactMachineMatch = onlineMachinesWithEncryption.filter((candidate) => candidate.id === machineId);
+        const hostMatchedMachines = onlineMachinesWithEncryption.filter((candidate) => (
+            !!sessionHost && candidate.metadata?.host === sessionHost
+        ));
+        const homeDirMatchedMachines = onlineMachinesWithEncryption.filter((candidate) => (
+            !!sessionHomeDir && candidate.metadata?.homeDir === sessionHomeDir
+        ));
+        const pathMatchedMachines = onlineMachinesWithEncryption.filter((candidate) => (
+            !!candidate.metadata?.homeDir && directory.startsWith(candidate.metadata.homeDir)
+        ));
+        const candidateMachineIds = Array.from(new Set([
+            ...exactMachineMatch.map((candidate) => candidate.id),
+            ...hostMatchedMachines.map((candidate) => candidate.id),
+            ...homeDirMatchedMachines.map((candidate) => candidate.id),
+            ...pathMatchedMachines.map((candidate) => candidate.id),
+            ...onlineMachinesWithEncryption.map((candidate) => candidate.id),
+            sync.encryption.getMachineEncryption(machineId) ? machineId : null
+        ].filter((value): value is string => !!value)));
+
+        if (candidateMachineIds.length === 0) {
+            Modal.alert(t('common.error'), `当前没有可用于恢复的在线机器。这个历史会话绑定的机器 ID 是 ${machineId}，但 App 没有拿到它对应的加密信息。通常是旧机器记录已经失效，需要刷新机器列表或重新登录后再试。`);
+            return;
+        }
+
+        let lastErrorMessage = '';
+        for (const candidateMachineId of candidateMachineIds) {
+            let allowDirectoryCreation = approvedNewDirectoryCreation;
+            while (true) {
+                const result = await machineSpawnNewSession({
+                    machineId: candidateMachineId,
+                    directory,
+                    sessionId: claudeSessionId,
+                    approvedNewDirectoryCreation: allowDirectoryCreation,
+                    agent: 'claude'
+                });
+                switch (result.type) {
+                    case 'success':
+                        router.push(`/session/${result.sessionId}`);
+                        return;
+                    case 'requestToApproveDirectoryCreation': {
+                        const approved = await Modal.confirm('Create Directory?', `The directory '${result.directory}' does not exist. Would you like to create it?`, { cancelText: t('common.cancel'), confirmText: t('common.create') });
+                        if (!approved) {
+                            return;
+                        }
+                        allowDirectoryCreation = true;
+                        continue;
+                    }
+                    case 'error':
+                        lastErrorMessage = result.errorMessage;
+                        break;
+                }
+                break;
+            }
+        }
+        if (lastErrorMessage === 'RPC method not available') {
+            Modal.alert(t('common.error'), 'Daemon 进程虽然已启动，但它当前没有连上后端的 WebSocket，所以服务器找不到这台机器的 RPC 能力。请重启 happy-server 和 daemon 后再试。');
+            return;
+        }
+        Modal.alert(t('common.error'), lastErrorMessage || 'Machine is offline. Start daemon on this machine and try again.');
+    }, [allMachines, machine, router, session.metadata?.claudeSessionId, session.metadata?.host, session.metadata?.machineId, session.metadata?.path]);
+
+    const canResumeSession = !sessionStatus.isConnected
+        && !session.active
+        && (!!session.metadata?.machineId)
+        && (!!session.metadata?.path)
+        && (!!session.metadata?.claudeSessionId)
+        && ((session.metadata?.flavor ?? 'claude') === 'claude');
 
     const formatDate = useCallback((timestamp: number) => {
         return new Date(timestamp).toLocaleString();
@@ -323,6 +411,16 @@ function SessionInfoContent({ session }: { session: Session }) {
                             subtitle={t('sessionInfo.archiveSessionSubtitle')}
                             icon={<Ionicons name="archive-outline" size={29} color="#FF3B30" />}
                             onPress={handleArchiveSession}
+                        />
+                    )}
+                    {canResumeSession && (
+                        <Item
+                            title="Resume Session"
+                            subtitle="Continue from this historical session context"
+                            icon={<Ionicons name="play-circle-outline" size={29} color="#34C759" />}
+                            onPress={() => {
+                                void resumeSession();
+                            }}
                         />
                     )}
                     {!sessionStatus.isConnected && !session.active && (
