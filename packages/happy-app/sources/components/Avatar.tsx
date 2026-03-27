@@ -48,12 +48,19 @@ export const Avatar = React.memo((props: AvatarProps) => {
     const avatarStyle = useSetting('avatarStyle');
     const showFlavorIcons = useSetting('showFlavorIcons');
     const { theme } = useUnistyles();
+    const normalizedImageUrl = (typeof imageUrl === 'string' ? imageUrl.trim() : '');
+    const isValidImageUrl =
+        normalizedImageUrl.startsWith('http://') ||
+        normalizedImageUrl.startsWith('https://') ||
+        normalizedImageUrl.startsWith('file://') ||
+        normalizedImageUrl.startsWith('data:') ||
+        normalizedImageUrl.startsWith('content://');
 
     // Render custom image if provided
-    if (imageUrl) {
+    if (isValidImageUrl) {
         const imageElement = (
             <Image
-                source={{ uri: imageUrl, thumbhash: thumbhash || undefined }}
+                source={{ uri: normalizedImageUrl, thumbhash: thumbhash || undefined }}
                 placeholder={thumbhash ? { thumbhash: thumbhash } : undefined}
                 contentFit="cover"
                 style={{

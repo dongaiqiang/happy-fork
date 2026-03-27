@@ -17,12 +17,36 @@ export function useStreamingAsrProvider({ onTextUpdate, sessionId }: StreamingAs
     const streamRef = useRef<MediaStream | null>(null);
     const chunkCountRef = useRef<number>(0);
     const nativeRecorderRef = useRef<any>(null);
-    const resultTextArrayRef = useRef<string[]>([]);
+    const committedTextRef = useRef<string>('');
+    const currentSentenceTextRef = useRef<string>('');
     const onTextUpdateRef = useRef(onTextUpdate);
 
     useEffect(() => {
         onTextUpdateRef.current = onTextUpdate;
     }, [onTextUpdate]);
+
+    const appendWithOverlap = useCallback((base: string, incoming: string) => {
+        if (!incoming) {
+            return base;
+        }
+        if (!base) {
+            return incoming;
+        }
+        if (base.endsWith(incoming)) {
+            return base;
+        }
+        if (incoming.startsWith(base)) {
+            return incoming;
+        }
+
+        const maxOverlap = Math.min(base.length, incoming.length);
+        for (let length = maxOverlap; length > 0; length--) {
+            if (base.slice(-length) === incoming.slice(0, length)) {
+                return base + incoming.slice(length);
+            }
+        }
+        return base + incoming;
+    }, []);
 
     const toPcmBase64 = useCallback((pcmData: Int16Array) => {
         return encodeBase64(new Uint8Array(pcmData.buffer));
@@ -170,14 +194,23 @@ export function useStreamingAsrProvider({ onTextUpdate, sessionId }: StreamingAs
         const cleanupText = apiSocket.onMessage('asr_text', (data: any) => {
             console.log('[ASR Frontend] 收到后端发来的 asr_text:', data);
             if (data && data.text) {
-                let joinedText = '';
-                if (data.pgs === 'rpl') {
-                    joinedText = data.text;
-                    resultTextArrayRef.current = [joinedText];
+                const incomingText = String(data.text);
+                const pgs = data.pgs;
+
+                if (pgs === 'rpl') {
+                    currentSentenceTextRef.current = incomingText;
+                } else if (pgs === 'apd') {
+                    currentSentenceTextRef.current = appendWithOverlap(currentSentenceTextRef.current, incomingText);
                 } else {
-                    resultTextArrayRef.current.push(data.text);
-                    joinedText = resultTextArrayRef.current.join('');
+                    currentSentenceTextRef.current = appendWithOverlap(currentSentenceTextRef.current, incomingText);
                 }
+
+                if (data.ls) {
+                    committedTextRef.current = appendWithOverlap(committedTextRef.current, currentSentenceTextRef.current);
+                    currentSentenceTextRef.current = '';
+                }
+
+                const joinedText = appendWithOverlap(committedTextRef.current, currentSentenceTextRef.current);
                 console.log(`[ASR Frontend] 准备调用 onTextUpdate (sn:${data.sn}, pgs:${data.pgs}), 文本: "${joinedText}", onTextUpdate 是否存在: ${!!onTextUpdateRef.current}`);
                 if (onTextUpdateRef.current) {
                     onTextUpdateRef.current(joinedText);
@@ -200,7 +233,7 @@ export function useStreamingAsrProvider({ onTextUpdate, sessionId }: StreamingAs
             cleanupEnd();
             cleanupError();
         };
-    }, [stopListening]);
+    }, [appendWithOverlap, stopListening]);
 
     const startListening = useCallback(async () => {
         console.log('[ASR Frontend] startListening() 被调用');
@@ -212,7 +245,8 @@ export function useStreamingAsrProvider({ onTextUpdate, sessionId }: StreamingAs
                 return;
             }
 
-            resultTextArrayRef.current = [];
+            committedTextRef.current = '';
+            currentSentenceTextRef.current = '';
             chunkCountRef.current = 0;
             if (onTextUpdate) {
                 console.log('[ASR Frontend] 清空输入框');

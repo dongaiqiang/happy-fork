@@ -183,6 +183,10 @@ export function asrHandler(userId: string, socket: Socket) {
             log({ module: 'asr' }, `[ASR] 收到前端音频块 #${chunkCount}，大小: ${data.chunkByteLength ?? 0} bytes`);
         }
         const APPID = process.env.IFLYTEK_APPID;
+        const ptt = process.env.IFLYTEK_PTT === "0" ? 0 : 1;
+        const vadEosRaw = Number(process.env.IFLYTEK_VAD_EOS);
+        const vadEos = Number.isFinite(vadEosRaw) && vadEosRaw > 0 ? Math.floor(vadEosRaw) : 10000;
+        const dwa = process.env.IFLYTEK_DWA === "off" ? undefined : "wpgs";
 
         const reqData: any = {
             data: {
@@ -197,13 +201,16 @@ export function asrHandler(userId: string, socket: Socket) {
             reqData.common = { app_id: APPID };
             reqData.business = {
                 language: "zh_cn",
-                domain: "iat", // 默认为日常用语 iat。可选：medical(医疗), gov(政务) 等。古诗词没有专用领域。
+                domain: "iat",
                 accent: "mandarin",
                 vinfo: 1,
-                vad_eos: 10000, // 增加尾端静音超时时间到最大值 (10秒)
-                dwa: "wpgs",    // 开启动态修正
-                ptt: 0          // 【核心修改】强制关闭标点符号！因为加标点容易让引擎提前判定句子结束并挂断
+                vad_eos: vadEos,
+                ptt
             };
+            if (dwa) {
+                reqData.business.dwa = dwa;
+            }
+            log({ module: 'asr' }, `[ASR] 参数 ptt=${ptt} vad_eos=${vadEos} dwa=${dwa ?? "off"}`);
             isFirstFrame = false;
         }
 
