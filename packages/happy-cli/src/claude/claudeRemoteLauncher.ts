@@ -83,6 +83,19 @@ export async function claudeRemoteLauncher(session: Session): Promise<'switch' |
         await abort();
     }
 
+    async function doStopSessionInner() {
+        logger.debug('[remote]: doStopSession');
+        if (!exitReason) {
+            exitReason = 'exit';
+        }
+        await abort();
+    }
+    
+    async function doStopSession() {
+        void doStopSessionInner();
+        return { success: true, message: 'Stopping session' };
+    }
+
     async function doSwitch() {
         logger.debug('[remote]: doSwitch');
         if (!exitReason) {
@@ -94,6 +107,7 @@ export async function claudeRemoteLauncher(session: Session): Promise<'switch' |
     // When to abort
     session.client.rpcHandlerManager.registerHandler('abort', doAbort); // When abort clicked
     session.client.rpcHandlerManager.registerHandler('switch', doSwitch); // When switch clicked
+    session.client.rpcHandlerManager.registerHandler('stopSession', doStopSession);
     // Removed catch-all stdin handler - now handled by RemoteModeDisplay keyboard handlers
 
     // Create permission handler

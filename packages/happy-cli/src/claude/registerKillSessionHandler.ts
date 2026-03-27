@@ -15,6 +15,15 @@ export function registerKillSessionHandler(
     rpcHandlerManager: RpcHandlerManager,
     killThisHappy: () => Promise<void>
 ) {
+    rpcHandlerManager.registerHandler<KillSessionRequest, KillSessionResponse>('stopSession', async () => {
+        logger.debug('Stop session request received');
+        void killThisHappy();
+        return {
+            success: true,
+            message: 'Stopping happy-cli process'
+        };
+    });
+
     rpcHandlerManager.registerHandler<KillSessionRequest, KillSessionResponse>('killSession', async () => {
         logger.debug('Kill session request received');
 

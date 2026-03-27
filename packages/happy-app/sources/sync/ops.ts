@@ -493,6 +493,26 @@ export async function sessionKill(sessionId: string): Promise<SessionKillRespons
     }
 }
 
+export async function sessionStop(sessionId: string): Promise<SessionKillResponse> {
+    try {
+        const response = await apiSocket.sessionRPC<SessionKillResponse, {}>(
+            sessionId,
+            'stopSession',
+            {}
+        );
+        return response;
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        if (message.includes('RPC method not available')) {
+            return sessionKill(sessionId);
+        }
+        return {
+            success: false,
+            message
+        };
+    }
+}
+
 /**
  * Permanently delete a session from the server
  * This will remove the session and all its associated data (messages, usage reports, access keys)

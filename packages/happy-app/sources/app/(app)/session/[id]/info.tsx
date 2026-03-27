@@ -11,7 +11,7 @@ import { storage, useSession, useIsDataReady, useMachine, useAllMachines } from 
 import { getSessionName, useSessionStatus, formatOSPlatform, formatPathRelativeToHome, getSessionAvatarId } from '@/utils/sessionUtils';
 import * as Clipboard from 'expo-clipboard';
 import { Modal } from '@/modal';
-import { machineSpawnNewSession, sessionKill, sessionDelete } from '@/sync/ops';
+import { machineSpawnNewSession, sessionKill, sessionStop, sessionDelete } from '@/sync/ops';
 import { useUnistyles } from 'react-native-unistyles';
 import { layout } from '@/components/layout';
 import { t } from '@/text';
@@ -179,6 +179,30 @@ function SessionInfoContent({ session }: { session: Session }) {
             ]
         );
     }, [performArchive]);
+
+    const [stoppingSession, performStop] = useHappyAction(async () => {
+        const result = await sessionStop(session.id);
+        if (!result.success) {
+            throw new HappyError(result.message || t('sessionInfo.failedToStopSession'), false);
+        }
+        router.back();
+        router.back();
+    });
+
+    const handleStopSession = useCallback(() => {
+        Modal.alert(
+            t('sessionInfo.stopSession'),
+            t('sessionInfo.stopSessionConfirm'),
+            [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                    text: t('sessionInfo.stopSession'),
+                    style: 'destructive',
+                    onPress: performStop
+                }
+            ]
+        );
+    }, [performStop]);
 
     // Use HappyAction for deletion - it handles errors automatically
     const [deletingSession, performDelete] = useHappyAction(async () => {
@@ -407,9 +431,17 @@ function SessionInfoContent({ session }: { session: Session }) {
                     )}
                     {sessionStatus.isConnected && (
                         <Item
-                            title={t('sessionInfo.archiveSession')}
-                            subtitle={t('sessionInfo.archiveSessionSubtitle')}
-                            icon={<Ionicons name="archive-outline" size={29} color="#FF3B30" />}
+                            title={t('sessionInfo.stopSession')}
+                            subtitle={t('sessionInfo.stopSessionSubtitle')}
+                            icon={<Ionicons name="pause-circle-outline" size={29} color="#FF3B30" />}
+                            onPress={handleStopSession}
+                        />
+                    )}
+                    {devModeEnabled && sessionStatus.isConnected && (
+                        <Item
+                            title={t('sessionInfo.killSession')}
+                            subtitle={t('sessionInfo.killSessionSubtitle')}
+                            icon={<Ionicons name="skull-outline" size={29} color="#FF3B30" />}
                             onPress={handleArchiveSession}
                         />
                     )}

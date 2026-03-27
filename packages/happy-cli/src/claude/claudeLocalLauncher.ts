@@ -75,9 +75,24 @@ export async function claudeLocalLauncher(session: Session): Promise<LauncherRes
             await abort();
         }
 
+        async function doStopSessionInner() {
+            logger.debug('[local]: doStopSession');
+            if (!exitReason) {
+                exitReason = { type: 'exit', code: 0 };
+            }
+            session.client.closeClaudeSessionTurn('cancelled');
+            await abort();
+        }
+        
+        async function doStopSession() {
+            void doStopSessionInner();
+            return { success: true, message: 'Stopping session' };
+        }
+
         // When to abort
         session.client.rpcHandlerManager.registerHandler('abort', doAbort); // Abort current process, clean queue and switch to remote mode
         session.client.rpcHandlerManager.registerHandler('switch', doSwitch); // When user wants to switch to remote mode
+        session.client.rpcHandlerManager.registerHandler('stopSession', doStopSession);
         session.queue.setOnMessage((message: string, mode) => {
             // Switch to remote mode when message received
             doSwitch();
@@ -153,6 +168,7 @@ export async function claudeLocalLauncher(session: Session): Promise<LauncherRes
         // Set handlers to no-op
         session.client.rpcHandlerManager.registerHandler('abort', async () => { });
         session.client.rpcHandlerManager.registerHandler('switch', async () => { });
+        session.client.rpcHandlerManager.registerHandler('stopSession', async () => ({ success: true, message: 'No-op' }));
         session.queue.setOnMessage(null);
         
         // Remove session found callback
