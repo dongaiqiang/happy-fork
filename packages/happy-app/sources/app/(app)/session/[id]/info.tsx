@@ -11,7 +11,7 @@ import { storage, useSession, useIsDataReady, useMachine, useAllMachines } from 
 import { getSessionName, useSessionStatus, formatOSPlatform, formatPathRelativeToHome, getSessionAvatarId } from '@/utils/sessionUtils';
 import * as Clipboard from 'expo-clipboard';
 import { Modal } from '@/modal';
-import { machineSpawnNewSession, sessionKill, sessionStop, sessionDelete } from '@/sync/ops';
+import { machineSpawnNewSession, sessionKill, sessionStop, sessionDelete, sessionGetControlState, sessionHandoffToMac, type SessionControlState } from '@/sync/ops';
 import { useUnistyles } from 'react-native-unistyles';
 import { layout } from '@/components/layout';
 import { t } from '@/text';
@@ -133,6 +133,26 @@ function SessionInfoContent({ session }: { session: Session }) {
     
     // Check if CLI version is outdated
     const isCliOutdated = session.metadata?.version && !isVersionSupported(session.metadata.version, MINIMUM_CLI_VERSION);
+    const [controlState, setControlState] = React.useState<SessionControlState | null>(null);
+
+    const refreshControlState = useCallback(async () => {
+        const result = await sessionGetControlState(session.id);
+        if (result.success && result.state) {
+            setControlState(result.state);
+        }
+    }, [session.id]);
+
+    React.useEffect(() => {
+        void refreshControlState();
+    }, [refreshControlState]);
+    const effectiveControlState: SessionControlState | null = session.controllerLeaseVersion !== undefined ? {
+        sessionId: session.id,
+        controller: session.controller ?? 'mobile',
+        leaseVersion: session.controllerLeaseVersion ?? 0,
+        handoffState: session.handoffState ?? 'idle',
+        handoffReason: session.handoffReason ?? null,
+        controllerUpdatedAt: session.controllerUpdatedAt ?? session.updatedAt
+    } : controlState;
 
     const handleCopySessionId = useCallback(async () => {
         if (!session) return;
@@ -305,12 +325,123 @@ function SessionInfoContent({ session }: { session: Session }) {
         Modal.alert(t('common.error'), lastErrorMessage || 'Machine is offline. Start daemon on this machine and try again.');
     }, [allMachines, machine, router, session.metadata?.claudeSessionId, session.metadata?.host, session.metadata?.machineId, session.metadata?.path]);
 
-    const canResumeSession = !sessionStatus.isConnected
-        && !session.active
-        && (!!session.metadata?.machineId)
+    const isResumeCapableSession = (!!session.metadata?.machineId)
         && (!!session.metadata?.path)
         && (!!session.metadata?.claudeSessionId)
         && ((session.metadata?.flavor ?? 'claude') === 'claude');
+
+    const canResumeSession = !sessionStatus.isConnected
+        && !session.active
+        && isResumeCapableSession;
+    const canOpenInMac = isResumeCapableSession;
+
+    const [handingOffToMac, performHandoffToMac] = useHappyAction(async () => {
+        const machineId = session.metadata?.machineId;
+        const directory = session.metadata?.path;
+        const claudeSessionId = session.metadata?.claudeSessionId;
+        if (!machineId || !directory || !claudeSessionId) {
+            throw new HappyError('This session cannot be handed off because required metadata is missing.', false);
+        }
+        const expectedLeaseVersion = effectiveControlState?.leaseVersion ?? 0;
+        const result = await sessionHandoffToMac({
+            sessionId: session.id,
+            machineId,
+            directory,
+            claudeSessionId,
+            expectedLeaseVersion
+        });
+        if (!result.success) {
+            const reason = result.message || result.error || 'handoff-failed';
+            const shouldUseDirectRpcFallback = reason.includes('machine-rpc-unavailable')
+                || reason.includes('Invalid key length')
+                || reason.includes('Internal Server Error');
+            if (shouldUseDirectRpcFallback) {
+                if (sessionStatus.isConnected) {
+                    const stopResult = await sessionStop(session.id);
+                    if (!stopResult.success) {
+                        throw new HappyError(
+                            `Open in Mac failed\nreason: stopSession failed before fallback (${stopResult.message || 'unknown'})\n请先点击“停止会话”，等待会话离线后再点击 Open in Mac。\nclaudeSessionId: ${claudeSessionId}\ndirectory: ${directory}`,
+                            false
+                        );
+                    }
+                }
+                let spawnResult = await machineSpawnNewSession({
+                    machineId,
+                    directory,
+                    sessionId: claudeSessionId,
+                    approvedNewDirectoryCreation: false,
+                    agent: 'claude'
+                });
+                if (spawnResult.type === 'requestToApproveDirectoryCreation') {
+                    spawnResult = await machineSpawnNewSession({
+                        machineId,
+                        directory,
+                        sessionId: claudeSessionId,
+                        approvedNewDirectoryCreation: true,
+                        agent: 'claude'
+                    });
+                }
+                if (spawnResult.type !== 'success') {
+                    const fallbackReason = spawnResult.type === 'error'
+                        ? spawnResult.errorMessage
+                        : 'directory-approval-required';
+                    throw new HappyError(
+                        `Open in Mac failed\nreason: ${fallbackReason || reason}\nclaudeSessionId: ${claudeSessionId}\ndirectory: ${directory}`,
+                        false
+                    );
+                }
+                await refreshControlState();
+                router.push(`/session/${spawnResult.sessionId}`);
+                Modal.alert(t('common.success'), 'Open in Mac completed');
+                return;
+            }
+            const reasonHint = reason.includes('claude-session-not-found')
+                ? '\nhint: daemon Claude auth/profile may differ from your terminal. Restart daemon with the same auth context and retry.'
+                : '';
+            throw new HappyError(
+                `Open in Mac failed\nreason: ${reason}\nclaudeSessionId: ${claudeSessionId}\ndirectory: ${directory}${reasonHint}`,
+                false
+            );
+        }
+        await refreshControlState();
+        if (result.resumedHappySessionId && result.resumedHappySessionId !== session.id) {
+            router.push(`/session/${result.resumedHappySessionId}`);
+            return;
+        }
+        Modal.alert(t('common.success'), 'Handoff to Mac completed');
+    });
+
+    const handleOpenInMac = useCallback(() => {
+        if (handingOffToMac) {
+            Modal.alert('请稍后', '正在切换到 Mac，请勿重复点击。');
+            return;
+        }
+        if (sessionStatus.isConnected || session.active) {
+            Modal.alert('请先停止当前会话', '当前会话仍在操作中。请先点击“停止会话”，等待会话离线后再点击 Open in Mac。');
+            return;
+        }
+        Modal.alert(
+            'Open in Mac',
+            'Switch control to Mac for this session?',
+            [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                    text: 'Open in Mac',
+                    onPress: performHandoffToMac
+                }
+            ]
+        );
+    }, [handingOffToMac, performHandoffToMac, session.active, sessionStatus.isConnected]);
+
+    const resumableReasonText = (() => {
+        if (sessionStatus.isConnected) return t('sessionInfo.resumableReasonSessionOnline');
+        if (session.active) return t('sessionInfo.resumableReasonSessionActive');
+        if ((session.metadata?.flavor ?? 'claude') !== 'claude') return t('sessionInfo.resumableReasonUnsupportedProvider');
+        if (!session.metadata?.machineId || !session.metadata?.path || !session.metadata?.claudeSessionId) {
+            return t('sessionInfo.resumableReasonMissingMetadata');
+        }
+        return t('sessionInfo.resumableReasonReady');
+    })();
 
     const formatDate = useCallback((timestamp: number) => {
         return new Date(timestamp).toLocaleString();
@@ -400,6 +531,15 @@ function SessionInfoContent({ session }: { session: Session }) {
                         showChevron={false}
                     />
                     <Item
+                        title={t('sessionInfo.resumableStatus')}
+                        subtitle={effectiveControlState
+                            ? `${resumableReasonText} | controller=${effectiveControlState.controller} | handoff=${effectiveControlState.handoffState}`
+                            : resumableReasonText}
+                        detail={canResumeSession ? t('sessionInfo.resumableAvailable') : t('sessionInfo.resumableUnavailable')}
+                        icon={<Ionicons name="refresh-circle-outline" size={29} color={canResumeSession ? "#34C759" : "#8E8E93"} />}
+                        showChevron={false}
+                    />
+                    <Item
                         title={t('sessionInfo.created')}
                         subtitle={formatDate(session.createdAt)}
                         icon={<Ionicons name="calendar-outline" size={29} color="#007AFF" />}
@@ -453,6 +593,14 @@ function SessionInfoContent({ session }: { session: Session }) {
                             onPress={() => {
                                 void resumeSession();
                             }}
+                        />
+                    )}
+                    {canOpenInMac && (
+                        <Item
+                            title="Open in Mac"
+                            subtitle={handingOffToMac ? 'Switching control to Mac...' : 'Stop mobile control and resume this session on Mac'}
+                            icon={<Ionicons name="desktop-outline" size={29} color="#5856D6" />}
+                            onPress={handleOpenInMac}
                         />
                     )}
                     {!sessionStatus.isConnected && !session.active && (

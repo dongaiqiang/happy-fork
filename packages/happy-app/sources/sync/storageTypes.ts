@@ -102,6 +102,11 @@ export interface Session {
         contextSize: number;
         timestamp: number;
     } | null;
+    controller?: 'mobile' | 'mac';
+    controllerLeaseVersion?: number;
+    handoffState?: 'idle' | 'switching' | 'failed';
+    handoffReason?: string | null;
+    controllerUpdatedAt?: number;
 }
 
 export interface DecryptedMessage {

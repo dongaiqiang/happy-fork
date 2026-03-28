@@ -34,6 +34,16 @@ export const ApiDeleteSessionSchema = z.object({
     sid: z.string(), // Session ID
 });
 
+export const ApiSessionControlSchema = z.object({
+    t: z.literal('session-control'),
+    id: z.string(),
+    controller: z.enum(['mobile', 'mac']),
+    leaseVersion: z.number().int().min(0),
+    handoffState: z.enum(['idle', 'switching', 'failed']),
+    handoffReason: z.string().nullable(),
+    controllerUpdatedAt: z.number()
+});
+
 export const ApiUpdateAccountSchema = z.object({
     t: z.literal('update-account'),
     id: z.string(),
@@ -117,6 +127,7 @@ export const ApiUpdateSchema = z.union([
     ApiUpdateNewMessageSchema,
     ApiUpdateNewSessionSchema,
     ApiDeleteSessionSchema,
+    ApiSessionControlSchema,
     ApiUpdateSessionStateSchema,
     ApiUpdateAccountSchema,
     ApiUpdateMachineStateSchema,

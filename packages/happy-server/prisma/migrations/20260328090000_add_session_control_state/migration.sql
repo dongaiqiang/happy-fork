@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "Session"
+ADD COLUMN "controller" TEXT NOT NULL DEFAULT 'mobile',
+ADD COLUMN "controllerLeaseVersion" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "handoffState" TEXT NOT NULL DEFAULT 'idle',
+ADD COLUMN "handoffReason" TEXT,
+ADD COLUMN "controllerUpdatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

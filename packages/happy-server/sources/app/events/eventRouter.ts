@@ -136,6 +136,14 @@ export type UpdateEvent = {
     type: 'delete-session';
     sessionId: string;
 } | {
+    type: 'session-control';
+    sessionId: string;
+    controller: 'mobile' | 'mac';
+    leaseVersion: number;
+    handoffState: 'idle' | 'switching' | 'failed';
+    handoffReason: string | null;
+    controllerUpdatedAt: number;
+} | {
     type: 'relationship-updated';
     uid: string;
     status: 'none' | 'requested' | 'pending' | 'friend' | 'rejected';
@@ -403,6 +411,25 @@ export function buildUpdateSessionUpdate(sessionId: string, updateSeq: number, u
             id: sessionId,
             metadata,
             agentState
+        },
+        createdAt: Date.now()
+    };
+}
+
+export function buildSessionControlUpdate(sessionId: string, updateSeq: number, updateId: string, control: {
+    controller: 'mobile' | 'mac';
+    leaseVersion: number;
+    handoffState: 'idle' | 'switching' | 'failed';
+    handoffReason: string | null;
+    controllerUpdatedAt: number;
+}): UpdatePayload {
+    return {
+        id: updateId,
+        seq: updateSeq,
+        body: {
+            t: 'session-control',
+            id: sessionId,
+            ...control
         },
         createdAt: Date.now()
     };

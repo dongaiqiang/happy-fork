@@ -126,6 +126,15 @@ interface SessionKillResponse {
     message: string;
 }
 
+export interface SessionControlState {
+    sessionId: string;
+    controller: 'mobile' | 'mac';
+    leaseVersion: number;
+    handoffState: 'idle' | 'switching' | 'failed';
+    handoffReason: string | null;
+    controllerUpdatedAt: number;
+}
+
 // Response types for spawn session
 export type SpawnSessionResult =
     | { type: 'success'; sessionId: string }
@@ -504,7 +513,30 @@ export async function sessionStop(sessionId: string): Promise<SessionKillRespons
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         if (message.includes('RPC method not available')) {
-            return sessionKill(sessionId);
+            try {
+                const killResponse = await apiSocket.sessionRPC<SessionKillResponse, {}>(
+                    sessionId,
+                    'killSession',
+                    {}
+                );
+                if (killResponse.success) {
+                    return {
+                        success: true,
+                        message: 'stopSession not supported by current daemon, session was terminated by killSession fallback'
+                    };
+                }
+                return {
+                    success: false,
+                    message: killResponse.message || 'stopSession is not available in current daemon, and killSession fallback failed'
+                };
+            } catch (killError) {
+                return {
+                    success: false,
+                    message: killError instanceof Error
+                        ? `stopSession is not available in current daemon, and killSession fallback failed: ${killError.message}`
+                        : 'stopSession is not available in current daemon, and killSession fallback failed'
+                };
+            }
         }
         return {
             success: false,
@@ -534,6 +566,73 @@ export async function sessionDelete(sessionId: string): Promise<{ success: boole
                 message: error || 'Failed to delete session'
             };
         }
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+}
+
+export async function sessionGetControlState(sessionId: string): Promise<{ success: boolean; state?: SessionControlState; message?: string }> {
+    try {
+        const response = await apiSocket.request(`/v3/sessions/${sessionId}/control-state`, {
+            method: 'GET'
+        });
+        if (!response.ok) {
+            const error = await response.text();
+            return { success: false, message: error || 'Failed to get control state' };
+        }
+        const result = await response.json() as { success: boolean; state?: SessionControlState };
+        return { success: true, state: result.state };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+}
+
+export async function sessionHandoffToMac(options: {
+    sessionId: string;
+    machineId: string;
+    directory: string;
+    claudeSessionId: string;
+    expectedLeaseVersion: number;
+    approvedNewDirectoryCreation?: boolean;
+}): Promise<{ success: boolean; state?: SessionControlState; message?: string; error?: string; resumedHappySessionId?: string }> {
+    try {
+        const response = await apiSocket.request(`/v3/sessions/${options.sessionId}/handoff/mac`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                expectedLeaseVersion: options.expectedLeaseVersion,
+                machineId: options.machineId,
+                directory: options.directory,
+                claudeSessionId: options.claudeSessionId,
+                approvedNewDirectoryCreation: options.approvedNewDirectoryCreation ?? false
+            })
+        });
+        const payload = await response.json() as {
+            success: boolean;
+            error?: string;
+            message?: string;
+            state?: SessionControlState;
+            resumedHappySessionId?: string;
+        };
+        if (!response.ok || !payload.success) {
+            return {
+                success: false,
+                error: payload.error,
+                state: payload.state,
+                message: payload.message || payload.error || `handoff failed (${response.status})`
+            };
+        }
+        return {
+            success: true,
+            state: payload.state,
+            resumedHappySessionId: payload.resumedHappySessionId
+        };
     } catch (error) {
         return {
             success: false,

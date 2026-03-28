@@ -1865,6 +1865,22 @@ class Sync {
             this.sessionQueueProcessing.delete(sessionId);
 
             log.log(`🗑️ Session ${sessionId} deleted from local storage`);
+        } else if (updateData.body.t === 'session-control') {
+            const session = storage.getState().sessions[updateData.body.id];
+            if (!session) {
+                this.fetchSessions();
+                return;
+            }
+            this.applySessions([{
+                ...session,
+                controller: updateData.body.controller,
+                controllerLeaseVersion: updateData.body.leaseVersion,
+                handoffState: updateData.body.handoffState,
+                handoffReason: updateData.body.handoffReason,
+                controllerUpdatedAt: updateData.body.controllerUpdatedAt,
+                updatedAt: updateData.createdAt,
+                seq: updateData.seq
+            }]);
         } else if (updateData.body.t === 'update-session') {
             const session = storage.getState().sessions[updateData.body.id];
             if (session) {

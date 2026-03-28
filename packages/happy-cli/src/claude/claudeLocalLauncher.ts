@@ -168,7 +168,6 @@ export async function claudeLocalLauncher(session: Session): Promise<LauncherRes
         // Set handlers to no-op
         session.client.rpcHandlerManager.registerHandler('abort', async () => { });
         session.client.rpcHandlerManager.registerHandler('switch', async () => { });
-        session.client.rpcHandlerManager.registerHandler('stopSession', async () => ({ success: true, message: 'No-op' }));
         session.queue.setOnMessage(null);
         
         // Remove session found callback
