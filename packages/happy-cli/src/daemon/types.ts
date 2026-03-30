@@ -17,6 +17,9 @@ export interface TrackedSession {
   error?: string;
   directoryCreated?: boolean;
   message?: string;
+  requestedDirectory?: string;
+  requestedMachineId?: string;
+  spawnedAt?: number;
   /** tmux session identifier (format: session:window) */
   tmuxSessionId?: string;
 }

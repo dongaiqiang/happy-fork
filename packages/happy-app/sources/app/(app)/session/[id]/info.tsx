@@ -296,6 +296,8 @@ function SessionInfoContent({ session }: { session: Session }) {
                     machineId: candidateMachineId,
                     directory,
                     sessionId: claudeSessionId,
+                    openTerminal: false,
+                    terminalCarrierMode: 'hosted',
                     approvedNewDirectoryCreation: allowDirectoryCreation,
                     agent: 'claude'
                 });
@@ -339,6 +341,13 @@ function SessionInfoContent({ session }: { session: Session }) {
         const machineId = session.metadata?.machineId;
         const directory = session.metadata?.path;
         const claudeSessionId = session.metadata?.claudeSessionId;
+        const syncToResumedSession = async (resumedHappySessionId?: string) => {
+            await sync.refreshSessions();
+            await refreshControlState();
+            if (resumedHappySessionId && resumedHappySessionId !== session.id) {
+                router.replace(`/session/${resumedHappySessionId}`);
+            }
+        };
         if (!machineId || !directory || !claudeSessionId) {
             throw new HappyError('This session cannot be handed off because required metadata is missing.', false);
         }
@@ -348,27 +357,21 @@ function SessionInfoContent({ session }: { session: Session }) {
             machineId,
             directory,
             claudeSessionId,
-            expectedLeaseVersion
+            expectedLeaseVersion,
+            openTerminal: true,
+            terminalCarrierMode: 'direct'
         });
         if (!result.success) {
             const reason = result.message || result.error || 'handoff-failed';
             const shouldUseDirectRpcFallback = reason.includes('machine-rpc-unavailable')
-                || reason.includes('Invalid key length')
-                || reason.includes('Internal Server Error');
+                || reason.includes('Invalid key length');
             if (shouldUseDirectRpcFallback) {
-                if (sessionStatus.isConnected) {
-                    const stopResult = await sessionStop(session.id);
-                    if (!stopResult.success) {
-                        throw new HappyError(
-                            `Open in Mac failed\nreason: stopSession failed before fallback (${stopResult.message || 'unknown'})\n请先点击“停止会话”，等待会话离线后再点击 Open in Mac。\nclaudeSessionId: ${claudeSessionId}\ndirectory: ${directory}`,
-                            false
-                        );
-                    }
-                }
                 let spawnResult = await machineSpawnNewSession({
                     machineId,
                     directory,
                     sessionId: claudeSessionId,
+                    openTerminal: true,
+                    terminalCarrierMode: 'direct',
                     approvedNewDirectoryCreation: false,
                     agent: 'claude'
                 });
@@ -377,6 +380,8 @@ function SessionInfoContent({ session }: { session: Session }) {
                         machineId,
                         directory,
                         sessionId: claudeSessionId,
+                        openTerminal: true,
+                        terminalCarrierMode: 'direct',
                         approvedNewDirectoryCreation: true,
                         agent: 'claude'
                     });
@@ -390,9 +395,10 @@ function SessionInfoContent({ session }: { session: Session }) {
                         false
                     );
                 }
-                await refreshControlState();
-                router.push(`/session/${spawnResult.sessionId}`);
-                Modal.alert(t('common.success'), 'Open in Mac completed');
+                await syncToResumedSession(spawnResult.sessionId);
+                Modal.alert(t('common.success'), spawnResult.sessionId && spawnResult.sessionId !== session.id
+                    ? '已在 Mac 打开 Claude 会话，并切换到新的同步会话'
+                    : '已在 Mac 打开 Claude 会话');
                 return;
             }
             const reasonHint = reason.includes('claude-session-not-found')
@@ -403,21 +409,15 @@ function SessionInfoContent({ session }: { session: Session }) {
                 false
             );
         }
-        await refreshControlState();
-        if (result.resumedHappySessionId && result.resumedHappySessionId !== session.id) {
-            router.push(`/session/${result.resumedHappySessionId}`);
-            return;
-        }
-        Modal.alert(t('common.success'), 'Handoff to Mac completed');
+        await syncToResumedSession(result.resumedHappySessionId);
+        Modal.alert(t('common.success'), result.resumedHappySessionId && result.resumedHappySessionId !== session.id
+            ? '已在 Mac 打开 Claude 会话，并切换到新的同步会话'
+            : '已在 Mac 打开 Claude 会话');
     });
 
     const handleOpenInMac = useCallback(() => {
         if (handingOffToMac) {
             Modal.alert('请稍后', '正在切换到 Mac，请勿重复点击。');
-            return;
-        }
-        if (sessionStatus.isConnected || session.active) {
-            Modal.alert('请先停止当前会话', '当前会话仍在操作中。请先点击“停止会话”，等待会话离线后再点击 Open in Mac。');
             return;
         }
         Modal.alert(
@@ -431,7 +431,7 @@ function SessionInfoContent({ session }: { session: Session }) {
                 }
             ]
         );
-    }, [handingOffToMac, performHandoffToMac, session.active, sessionStatus.isConnected]);
+    }, [handingOffToMac, performHandoffToMac]);
 
     const resumableReasonText = (() => {
         if (sessionStatus.isConnected) return t('sessionInfo.resumableReasonSessionOnline');

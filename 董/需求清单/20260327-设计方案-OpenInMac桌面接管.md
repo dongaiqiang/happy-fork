@@ -6,9 +6,11 @@
 
 1. 手机端一键 `Open in Mac`，在 Mac 端恢复同一 Claude 会话  
 2. 手机端与 Mac 端双端可见（消息同步）  
-3. 任意时刻仅一端可控（单写入、单执行）  
-4. 支持“控制权切换开关”  
-5. 新建会话后，手机端可见 `claudeSessionId`（含“获取中”状态）
+3. Open in Mac 成功后默认仍由手机端主控，Mac 端先进入可见态  
+4. 任意时刻仅一端可控（单写入、单执行）  
+5. 支持“控制权切换开关”  
+6. 支持 `Terminal Direct` / `Hosted` 两种启动承载方式  
+7. 新建会话后，手机端可见 `claudeSessionId`（含“获取中”状态）
 
 ---
 
@@ -86,10 +88,11 @@
 
 ### 5.2 状态迁移
 
-1. 手机发起 Open in Mac：`controller-mobile -> switching -> controller-mac`  
+1. 手机发起 Open in Mac：`controller-mobile -> switching -> controller-mobile`（Mac 进入可见态，主控暂不切换）  
 2. Mac 发起切回手机：`controller-mac -> switching -> controller-mobile`  
-3. 切换失败：`switching -> failed(可重试)`，保留上一个稳定 controller  
-4. 控制端离线：进入 `offline-observe`
+3. 显式切到 Mac 主控：`controller-mobile -> switching -> controller-mac`  
+4. 切换失败：`switching -> failed(可重试)`，保留上一个稳定 controller  
+5. 控制端离线：进入 `offline-observe`
 
 ---
 
@@ -97,13 +100,15 @@
 
 ## 6.1 Open in Mac（手机发起）
 
-1. App 请求 `handoffToMac(sessionId)`  
+1. App 请求 `handoffToMac(sessionId, terminalCarrierMode)`  
 2. Server CAS 更新 `handoffState=switching`、`leaseVersion+1`  
 3. 进入 switching 后，非主控端写入被临时拒绝，双端保持可见同步  
-4. Server 调用目标 machine 的 resume/spawn（携带 `claudeSessionId`）  
-5. Mac 接管成功后写回 `controller=mac`、`handoffState=idle` 并广播  
-6. 失败则写 `handoffState=failed + reason`，广播错误态  
-7. 用户侧无需先手动“停止会话”，会话在线与任务进行中均可直接发起 Open in Mac
+4. Server 调用目标 machine 的 resume/spawn（携带 `claudeSessionId` 与 `terminalCarrierMode`）  
+5. `Terminal Direct`：由 Mac 默认终端直接承载 Claude 本体进程；恢复已有会话时才带 `--resume <claudeSessionId>`  
+6. `Hosted`：由 daemon/tmux 等后台托管，再在终端中附着或查看  
+7. Open in Mac 成功后写回 `handoffState=idle` 并广播，默认保持 `controller=mobile`  
+8. 失败则写 `handoffState=failed + reason`，广播错误态  
+9. 用户侧无需先手动“停止会话”，会话在线与任务进行中均可直接发起 Open in Mac
 
 ### 6.2 控制权切换开关（双向）
 
@@ -127,7 +132,7 @@
 ### 7.1 App -> Server（新增/调整）
 
 1. `POST /v3/sessions/:id/handoff/mac`  
-   - 入参：`expectedLeaseVersion`  
+   - 入参：`expectedLeaseVersion, machineId, directory, claudeSessionId, openTerminal, terminalCarrierMode`  
    - 出参：`{ success, controller, leaseVersion, handoffState, reason }`
 2. `POST /v3/sessions/:id/controller-switch`  
    - 入参：`targetController, expectedLeaseVersion`  
@@ -136,7 +141,7 @@
 ### 7.2 Server -> Daemon RPC（machine-scoped）
 
 1. `open-in-mac`（可复用 spawn-happy-session，增加 handoff 语义）  
-   - 入参：`directory, claudeSessionId, sessionId, mode=resume`  
+   - 入参：`directory, claudeSessionId, sessionId, mode=resume, terminalCarrierMode=direct|hosted`  
    - 出参：`success/error + message`
 
 ### 7.3 Session RPC（session-scoped）
@@ -165,7 +170,7 @@
 1. 切换中按钮 disabled + loading  
 2. 成功 toast + 状态刷新  
 3. 失败提示携带 reason，并提供重试  
-4. Open in Mac 默认前台打开 Mac 终端并展示可见会话；仅在前台打开失败时降级后台恢复并给出提示
+4. Open in Mac 默认前台打开 Mac 终端并展示 Claude 本体界面；仅在显式选择 `Hosted` 时才展示托管会话视图
 
 ---
 
@@ -183,8 +188,9 @@
 1. daemon 不在线：直接失败，reason=`machine-offline`  
 2. RPC method unavailable：reason=`rpc-unavailable`，提示升级 daemon/CLI  
 3. handoff 超时：reason=`handoff-timeout`，允许用户重试  
-4. resume 失败：reason=`resume-failed`，保留旧 controller  
-5. metadata 未回传 ID：显示“获取中”，并定时刷新或等待 push update
+4. `Terminal Direct` 打开了终端但未在时限内回传 webhook：reason=`terminal-direct-timeout`  
+5. resume 失败：reason=`resume-failed`，保留旧 controller  
+6. metadata 未回传 ID：显示“获取中”，并定时刷新或等待 push update
 
 ---
 
@@ -219,10 +225,11 @@
 ## 12. 验收用例
 
 1. 手机创建会话后，1 个同步周期内看到 `claudeSessionId`  
-2. Open in Mac 成功后，Mac 可继续同一上下文，手机转只读  
-3. 双端同时在线时，仅 controller 端可执行写入  
-4. 切换失败时有可读 reason，且不出现双端同时可写  
-5. daemon 重启后状态可恢复，不破坏控制权一致性
+2. Open in Mac 成功后，Mac 默认终端可继续同一上下文，手机仍保持主控  
+3. 显式切换主控前，手机端仍可执行写入，Mac 端先作为可见态  
+4. 双端同时在线时，仅 controller 端可执行写入  
+5. 切换失败时有可读 reason，且不出现双端同时可写  
+6. daemon 重启后状态可恢复，不破坏控制权一致性
 
 ---
 

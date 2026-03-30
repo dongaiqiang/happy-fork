@@ -453,6 +453,9 @@ class Sync {
             console.error(`Session ${sessionId} not found in storage`);
             return;
         }
+        if (session.controller === 'mac' && session.handoffState === 'idle') {
+            return;
+        }
 
         const { permissionMode, model } = resolveMessageModeMeta(session);
 
@@ -737,11 +740,13 @@ class Sync {
 
         // Initialize all session encryptions first
         const sessionKeys = new Map<string, Uint8Array | null>();
+        const undecryptableSessionIds = new Set<string>();
         for (const session of sessions) {
             if (session.dataEncryptionKey) {
                 let decrypted = await this.encryption.decryptEncryptionKey(session.dataEncryptionKey);
                 if (!decrypted) {
-                    console.error(`Failed to decrypt data encryption key for session ${session.id}`);
+                    console.warn(`Skipping session ${session.id} because its data encryption key could not be decrypted`);
+                    undecryptableSessionIds.add(session.id);
                     continue;
                 }
                 sessionKeys.set(session.id, decrypted);
@@ -754,6 +759,10 @@ class Sync {
         // Decrypt sessions
         let decryptedSessions: (Omit<Session, 'presence'> & { presence?: "online" | number })[] = [];
         for (const session of sessions) {
+            if (undecryptableSessionIds.has(session.id)) {
+                continue;
+            }
+
             // Get session encryption (should always exist after initialization)
             const sessionEncryption = this.encryption.getSessionEncryption(session.id);
             if (!sessionEncryption) {
@@ -1111,11 +1120,13 @@ class Sync {
 
         // First, collect and decrypt encryption keys for all machines
         const machineKeysMap = new Map<string, Uint8Array | null>();
+        const undecryptableMachineIds = new Set<string>();
         for (const machine of machines) {
             if (machine.dataEncryptionKey) {
                 const decryptedKey = await this.encryption.decryptEncryptionKey(machine.dataEncryptionKey);
                 if (!decryptedKey) {
-                    console.error(`Failed to decrypt data encryption key for machine ${machine.id}`);
+                    console.warn(`Skipping machine ${machine.id} because its data encryption key could not be decrypted`);
+                    undecryptableMachineIds.add(machine.id);
                     continue;
                 }
                 machineKeysMap.set(machine.id, decryptedKey);
@@ -1132,6 +1143,10 @@ class Sync {
         const decryptedMachines: Machine[] = [];
 
         for (const machine of machines) {
+            if (undecryptableMachineIds.has(machine.id)) {
+                continue;
+            }
+
             // Get machine-specific encryption (might exist from previous initialization)
             const machineEncryption = this.encryption.getMachineEncryption(machine.id);
             if (!machineEncryption) {
@@ -1926,9 +1941,9 @@ class Sync {
 
                     // Re-fetch messages when control returns to mobile (local -> remote mode switch)
                     // This catches up on any messages that were exchanged while desktop had control
-                    const wasControlledByUser = session.agentState?.controlledByUser;
-                    const isNowControlledByUser = agentState?.controlledByUser;
-                    if (!wasControlledByUser && isNowControlledByUser) {
+                    const wasControlledByUser = !!session.agentState?.controlledByUser;
+                    const isNowControlledByUser = !!agentState?.controlledByUser;
+                    if (wasControlledByUser && !isNowControlledByUser) {
                         log.log(`🔄 Control returned to mobile for session ${updateData.body.id}, re-fetching messages`);
                         this.onSessionVisible(updateData.body.id);
                     }
@@ -1973,6 +1988,61 @@ class Sync {
                     // Don't crash on settings sync errors, just log
                 }
             }
+        } else if (updateData.body.t === 'new-machine') {
+            const machineUpdate = updateData.body;
+            const machineId = machineUpdate.machineId;
+
+            if (machineUpdate.dataEncryptionKey) {
+                const decryptedKey = await this.encryption.decryptEncryptionKey(machineUpdate.dataEncryptionKey);
+                if (!decryptedKey) {
+                    console.error(`Failed to decrypt data encryption key for machine ${machineId}`);
+                    this.machinesSync.invalidate();
+                    return;
+                }
+                this.machineDataKeys.set(machineId, decryptedKey);
+                await this.encryption.initializeMachines(new Map([[machineId, decryptedKey]]));
+            } else {
+                await this.encryption.initializeMachines(new Map([[machineId, null]]));
+            }
+
+            const machineEncryption = this.encryption.getMachineEncryption(machineId);
+            if (!machineEncryption) {
+                console.error(`Machine encryption not found for ${machineId} - fetching machines`);
+                this.machinesSync.invalidate();
+                return;
+            }
+
+            let metadata: Machine['metadata'] = null;
+            let daemonState: Machine['daemonState'] = null;
+
+            try {
+                metadata = machineUpdate.metadata
+                    ? await machineEncryption.decryptMetadata(machineUpdate.metadataVersion, machineUpdate.metadata)
+                    : null;
+            } catch (error) {
+                console.error(`Failed to decrypt machine metadata for ${machineId}:`, error);
+            }
+
+            try {
+                daemonState = machineUpdate.daemonState
+                    ? await machineEncryption.decryptDaemonState(machineUpdate.daemonStateVersion, machineUpdate.daemonState)
+                    : null;
+            } catch (error) {
+                console.error(`Failed to decrypt machine daemonState for ${machineId}:`, error);
+            }
+
+            storage.getState().applyMachines([{
+                id: machineId,
+                seq: machineUpdate.seq,
+                createdAt: machineUpdate.createdAt,
+                updatedAt: machineUpdate.updatedAt,
+                active: machineUpdate.active,
+                activeAt: machineUpdate.activeAt,
+                metadata,
+                metadataVersion: machineUpdate.metadataVersion,
+                daemonState,
+                daemonStateVersion: machineUpdate.daemonStateVersion,
+            }]);
         } else if (updateData.body.t === 'update-machine') {
             const machineUpdate = updateData.body;
             const machineId = machineUpdate.machineId;  // Changed from .id to .machineId
@@ -1995,7 +2065,8 @@ class Sync {
             // Get machine-specific encryption (might not exist if machine wasn't initialized)
             const machineEncryption = this.encryption.getMachineEncryption(machineId);
             if (!machineEncryption) {
-                console.error(`Machine encryption not found for ${machineId} - cannot decrypt updates`);
+                console.error(`Machine encryption not found for ${machineId} - fetching machines`);
+                this.machinesSync.invalidate();
                 return;
             }
 

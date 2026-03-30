@@ -296,10 +296,11 @@ function SessionViewLoaded({ sessionId, session }: { sessionId: string, session:
             )}
         </>
     ) : null;
+    const isReadOnly = session.controller === 'mac' && session.handoffState === 'idle';
 
     const input = (
         <AgentInput
-            placeholder={t('session.inputPlaceholder')}
+            placeholder={isReadOnly ? '当前由 Mac 控制，此端仅可查看' : t('session.inputPlaceholder')}
             value={message}
             onChangeText={setMessage}
             sessionId={sessionId}
@@ -317,6 +318,9 @@ function SessionViewLoaded({ sessionId, session }: { sessionId: string, session:
                 isPulsing: sessionStatus.isPulsing
             }}
             onSend={() => {
+                if (isReadOnly) {
+                    return;
+                }
                 if (message.trim()) {
                     setMessage('');
                     clearDraft();
@@ -332,6 +336,7 @@ function SessionViewLoaded({ sessionId, session }: { sessionId: string, session:
             // Autocomplete configuration
             autocompletePrefixes={['@', '/']}
             autocompleteSuggestions={(query) => getSuggestions(sessionId, query)}
+            isReadOnly={isReadOnly}
             usageData={sessionUsage ? {
                 inputTokens: sessionUsage.inputTokens,
                 outputTokens: sessionUsage.outputTokens,

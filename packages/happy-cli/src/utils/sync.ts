@@ -1,4 +1,5 @@
 import { backoff } from "@/utils/time";
+import { logger } from "@/ui/logger";
 
 export class InvalidateSync {
     private _invalidated = false;
@@ -57,14 +58,12 @@ export class InvalidateSync {
 
     private _doSync = async () => {
         try {
-            console.error("InvalidateSync _doSync started. stopped:", this._stopped);
             if (this._stopped) {
                 return;
             }
             await this._command();
-            console.error("InvalidateSync _doSync command finished.");
         } catch (e) {
-            console.error("InvalidateSync _doSync error:", e);
+            logger.debug("InvalidateSync _doSync error:", e);
         }
         
         if (this._stopped) {

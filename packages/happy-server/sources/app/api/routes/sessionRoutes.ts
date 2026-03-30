@@ -305,6 +305,61 @@ export function sessionRoutes(app: Fastify) {
         }
     });
 
+    app.get('/v1/sessions/:sessionId', {
+        schema: {
+            params: z.object({
+                sessionId: z.string()
+            })
+        },
+        preHandler: app.authenticate
+    }, async (request, reply) => {
+        const userId = request.userId;
+        const { sessionId } = request.params;
+
+        const session = await db.session.findFirst({
+            where: {
+                id: sessionId,
+                accountId: userId
+            },
+            select: {
+                id: true,
+                tag: true,
+                seq: true,
+                createdAt: true,
+                updatedAt: true,
+                metadata: true,
+                metadataVersion: true,
+                agentState: true,
+                agentStateVersion: true,
+                dataEncryptionKey: true,
+                active: true,
+                lastActiveAt: true
+            }
+        });
+
+        if (!session) {
+            return reply.code(404).send({ error: 'Session not found' });
+        }
+
+        return reply.send({
+            session: {
+                id: session.id,
+                tag: session.tag,
+                seq: session.seq,
+                metadata: session.metadata,
+                metadataVersion: session.metadataVersion,
+                agentState: session.agentState,
+                agentStateVersion: session.agentStateVersion,
+                dataEncryptionKey: session.dataEncryptionKey ? Buffer.from(session.dataEncryptionKey).toString('base64') : null,
+                active: session.active,
+                activeAt: session.lastActiveAt.getTime(),
+                createdAt: session.createdAt.getTime(),
+                updatedAt: session.updatedAt.getTime(),
+                lastMessage: null
+            }
+        });
+    });
+
     app.get('/v1/sessions/:sessionId/messages', {
         schema: {
             params: z.object({

@@ -1,4 +1,4 @@
-import { decodeBase64, encodeBase64, encodeBase64Url } from "@/api/encryption";
+import { decodeBase64, encodeBase64, encodeBase64Url, libsodiumPublicKeyFromSecretKey } from "@/api/encryption";
 import { configuration } from "@/configuration";
 import { randomBytes } from "node:crypto";
 import tweetnacl from 'tweetnacl';
@@ -190,9 +190,16 @@ async function waitForAuthentication(keypair: tweetnacl.BoxKeyPair): Promise<Cre
                             };
                         } else {
                             if (decrypted[0] === 0) {
+                                const hasExplicitPublicKey = decrypted.length >= 65;
+                                const publicKey = hasExplicitPublicKey
+                                    ? decrypted.slice(1, 33)
+                                    : null;
+                                const machineKey = hasExplicitPublicKey
+                                    ? decrypted.slice(33, 65)
+                                    : decrypted.slice(1, 33);
                                 const credentials = {
-                                    publicKey: decrypted.slice(1, 33),
-                                    machineKey: randomBytes(32),
+                                    publicKey: publicKey ?? libsodiumPublicKeyFromSecretKey(machineKey),
+                                    machineKey,
                                     token: token
                                 }
                                 await writeCredentialsDataKey(credentials);

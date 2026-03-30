@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { useAuth } from '@/auth/AuthContext';
 import { decodeBase64 } from '@/encryption/base64';
-import { encryptBox } from '@/encryption/libsodium';
+import { encryptBox, getPublicKeyForBox } from '@/encryption/libsodium';
 import { authApprove } from '@/auth/authApprove';
 import { useCheckScannerPermissions } from '@/hooks/useCheckCameraPermissions';
 import { Modal } from '@/modal';
@@ -46,12 +46,14 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
             // when creating a new account. We just need to pass something valid-looking.
             let responseV2Bundle: Uint8Array;
             if (process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE === 'true') {
-                responseV2Bundle = new Uint8Array(33); // 1 byte version (0) + 32 bytes dummy key
+                responseV2Bundle = new Uint8Array(65);
                 responseV2Bundle[0] = 0;
             } else {
-                responseV2Bundle = new Uint8Array(sync.encryption.contentDataKey.length + 1);
+                const contentPublicKey = getPublicKeyForBox(sync.encryption.contentDataKey);
+                responseV2Bundle = new Uint8Array(65);
                 responseV2Bundle[0] = 0;
-                responseV2Bundle.set(sync.encryption.contentDataKey, 1);
+                responseV2Bundle.set(contentPublicKey, 1);
+                responseV2Bundle.set(sync.encryption.contentDataKey, 33);
             }
             
             const responseV2 = encryptBox(responseV2Bundle, publicKey);

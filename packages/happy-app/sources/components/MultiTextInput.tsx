@@ -30,6 +30,7 @@ interface MultiTextInputProps {
     value: string;
     onChangeText: (text: string) => void;
     placeholder?: string;
+    editable?: boolean;
     maxHeight?: number;
     paddingTop?: number;
     paddingBottom?: number;
@@ -45,6 +46,7 @@ export const MultiTextInput = React.forwardRef<MultiTextInputHandle, MultiTextIn
         value,
         onChangeText,
         placeholder,
+        editable = true,
         maxHeight = 120,
         onKeyPress,
         onSelectionChange,
@@ -196,6 +198,7 @@ export const MultiTextInput = React.forwardRef<MultiTextInputHandle, MultiTextIn
                 placeholder={placeholder}
                 placeholderTextColor={theme.colors.input.placeholder}
                 value={value}
+                editable={editable}
                 onChangeText={handleTextChange}
                 onKeyPress={handleKeyPress}
                 onSelectionChange={handleSelectionChange}

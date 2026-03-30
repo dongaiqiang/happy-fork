@@ -146,6 +146,8 @@ export interface SpawnSessionOptions {
     machineId: string;
     directory: string;
     sessionId?: string;
+    openTerminal?: boolean;
+    terminalCarrierMode?: 'direct' | 'hosted';
     approvedNewDirectoryCreation?: boolean;
     token?: string;
     agent?: 'codex' | 'claude' | 'gemini';
@@ -169,13 +171,15 @@ export interface SpawnSessionOptions {
  */
 export async function machineSpawnNewSession(options: SpawnSessionOptions): Promise<SpawnSessionResult> {
 
-    const { machineId, directory, sessionId, approvedNewDirectoryCreation = false, token, agent, environmentVariables } = options;
+    const { machineId, directory, sessionId, openTerminal = false, terminalCarrierMode, approvedNewDirectoryCreation = false, token, agent, environmentVariables } = options;
 
     try {
         const result = await apiSocket.machineRPC<SpawnSessionResult, {
             type: 'spawn-in-directory'
             directory: string
             sessionId?: string,
+            openTerminal?: boolean,
+            terminalCarrierMode?: 'direct' | 'hosted',
             approvedNewDirectoryCreation?: boolean,
             token?: string,
             agent?: 'codex' | 'claude' | 'gemini',
@@ -183,7 +187,7 @@ export async function machineSpawnNewSession(options: SpawnSessionOptions): Prom
         }>(
             machineId,
             'spawn-happy-session',
-            { type: 'spawn-in-directory', directory, sessionId, approvedNewDirectoryCreation, token, agent, environmentVariables }
+            { type: 'spawn-in-directory', directory, sessionId, openTerminal, terminalCarrierMode, approvedNewDirectoryCreation, token, agent, environmentVariables }
         );
         return result;
     } catch (error) {
@@ -599,6 +603,8 @@ export async function sessionHandoffToMac(options: {
     directory: string;
     claudeSessionId: string;
     expectedLeaseVersion: number;
+    openTerminal?: boolean;
+    terminalCarrierMode?: 'direct' | 'hosted';
     approvedNewDirectoryCreation?: boolean;
 }): Promise<{ success: boolean; state?: SessionControlState; message?: string; error?: string; resumedHappySessionId?: string }> {
     try {
@@ -610,6 +616,8 @@ export async function sessionHandoffToMac(options: {
                 machineId: options.machineId,
                 directory: options.directory,
                 claudeSessionId: options.claudeSessionId,
+                openTerminal: options.openTerminal ?? true,
+                terminalCarrierMode: options.terminalCarrierMode ?? 'direct',
                 approvedNewDirectoryCreation: options.approvedNewDirectoryCreation ?? false
             })
         });

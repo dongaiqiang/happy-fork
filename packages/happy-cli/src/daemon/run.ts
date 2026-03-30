@@ -17,11 +17,12 @@ import { writeDaemonState, DaemonLocallyPersistedState, readDaemonState, acquire
 
 import { cleanupDaemonState, isDaemonRunningCurrentlyInstalledHappyVersion, stopDaemon } from './controlClient';
 import { startDaemonControlServer } from './controlServer';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, createWriteStream, mkdirSync, existsSync } from 'fs';
+import { join, resolve as resolvePath } from 'path';
 import { projectPath } from '@/projectPath';
-import { getTmuxUtilities, isTmuxAvailable, parseTmuxSessionIdentifier, formatTmuxSessionIdentifier } from '@/utils/tmux';
+import { getTmuxUtilities, isTmuxAvailable, parseTmuxSessionIdentifier } from '@/utils/tmux';
 import { expandEnvironmentVariables } from '@/utils/expandEnvVars';
+import { spawn } from 'child_process';
 
 // Prepare initial metadata
 export const initialMachineMetadata: MachineMetadata = {
@@ -169,11 +170,48 @@ export async function startDaemon(): Promise<void> {
 
     // Session spawning awaiter system
     const pidToAwaiter = new Map<number, (session: TrackedSession) => void>();
+    const externalSessionAwaiters = new Map<string, {
+      matches: (sessionId: string, sessionMetadata: Metadata) => boolean;
+      resolve: (session: TrackedSession) => void;
+    }>();
 
     // Helper functions
     const getCurrentChildren = () => Array.from(pidToTrackedSession.values());
 
     // Handle webhook from happy session reporting itself
+    const resolveExternalSessionAwaiters = (sessionId: string, sessionMetadata: Metadata, trackedSession: TrackedSession) => {
+      for (const [awaiterId, awaiter] of externalSessionAwaiters.entries()) {
+        if (!awaiter.matches(sessionId, sessionMetadata)) {
+          continue;
+        }
+        externalSessionAwaiters.delete(awaiterId);
+        awaiter.resolve(trackedSession);
+      }
+    };
+    const findPendingDaemonTrackedSession = (sessionMetadata: Metadata): { trackedSession: TrackedSession; originalPid: number } | null => {
+      const reportedDirectoryNormalized = normalizeDirectoryForComparison(sessionMetadata.path, sessionMetadata.homeDir);
+      for (const [trackedPid, trackedSession] of pidToTrackedSession.entries()) {
+        if (trackedSession.startedBy !== 'daemon' || trackedSession.happySessionId) {
+          continue;
+        }
+        if ((trackedSession.spawnedAt ?? 0) + 30_000 < Date.now()) {
+          continue;
+        }
+        if (trackedSession.requestedMachineId && sessionMetadata.machineId && trackedSession.requestedMachineId !== sessionMetadata.machineId) {
+          continue;
+        }
+        const requestedDirectoryNormalized = normalizeDirectoryForComparison(trackedSession.requestedDirectory);
+        if (requestedDirectoryNormalized && reportedDirectoryNormalized && requestedDirectoryNormalized !== reportedDirectoryNormalized) {
+          continue;
+        }
+        return {
+          trackedSession,
+          originalPid: trackedPid
+        };
+      }
+      return null;
+    };
+
     const onHappySessionWebhook = (sessionId: string, sessionMetadata: Metadata) => {
       logger.debugLargeJson(`[DAEMON RUN] Session reported`, sessionMetadata);
 
@@ -188,21 +226,32 @@ export async function startDaemon(): Promise<void> {
 
       // Check if we already have this PID (daemon-spawned)
       const existingSession = pidToTrackedSession.get(pid);
+      const pendingMatch = existingSession ? null : findPendingDaemonTrackedSession(sessionMetadata);
+      const matchedSession = existingSession ?? pendingMatch?.trackedSession;
+      const matchedSessionPid = existingSession ? pid : pendingMatch?.originalPid;
 
-      if (existingSession && existingSession.startedBy === 'daemon') {
-        // Update daemon-spawned session with reported data
-        existingSession.happySessionId = sessionId;
-        existingSession.happySessionMetadataFromLocalWebhook = sessionMetadata;
-        logger.debug(`[DAEMON RUN] Updated daemon-spawned session ${sessionId} with metadata`);
-
-        // Resolve any awaiter for this PID
-        const awaiter = pidToAwaiter.get(pid);
-        if (awaiter) {
-          pidToAwaiter.delete(pid);
-          awaiter(existingSession);
-          logger.debug(`[DAEMON RUN] Resolved session awaiter for PID ${pid}`);
+      if (matchedSession && matchedSessionPid !== undefined) {
+        if (matchedSessionPid !== pid) {
+          pidToTrackedSession.delete(matchedSessionPid);
+          matchedSession.pid = pid;
+          pidToTrackedSession.set(pid, matchedSession);
+          logger.debug(`[DAEMON RUN] Re-linked tracked session from PID ${matchedSessionPid} to reported PID ${pid}`);
         }
-      } else if (!existingSession) {
+        matchedSession.happySessionId = sessionId;
+        matchedSession.happySessionMetadataFromLocalWebhook = sessionMetadata;
+        logger.debug(`[DAEMON RUN] Updated tracked session ${sessionId} with metadata`);
+
+        if (matchedSession.startedBy === 'daemon') {
+          const awaiter = pidToAwaiter.get(matchedSessionPid) ?? pidToAwaiter.get(pid);
+          if (awaiter) {
+            pidToAwaiter.delete(matchedSessionPid);
+            pidToAwaiter.delete(pid);
+            awaiter(matchedSession);
+            logger.debug(`[DAEMON RUN] Resolved session awaiter for PID ${matchedSessionPid}`);
+          }
+        }
+        resolveExternalSessionAwaiters(sessionId, sessionMetadata, matchedSession);
+      } else {
         // New session started externally
         const trackedSession: TrackedSession = {
           startedBy: 'happy directly - likely by user from terminal',
@@ -212,16 +261,151 @@ export async function startDaemon(): Promise<void> {
         };
         pidToTrackedSession.set(pid, trackedSession);
         logger.debug(`[DAEMON RUN] Registered externally-started session ${sessionId}`);
+        resolveExternalSessionAwaiters(sessionId, sessionMetadata, trackedSession);
       }
+    };
+
+    const shellSingleQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
+    const appleScriptDoubleQuote = (value: string): string => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const normalizeDirectoryForComparison = (value: string | undefined, homeDirectory?: string): string | undefined => {
+      if (!value) {
+        return undefined;
+      }
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return undefined;
+      }
+      const baseHomeDirectory = homeDirectory?.trim() || os.homedir();
+      if (trimmed === '~') {
+        return resolvePath(baseHomeDirectory);
+      }
+      if (trimmed.startsWith('~/')) {
+        return resolvePath(baseHomeDirectory, trimmed.slice(2));
+      }
+      return resolvePath(trimmed);
+    };
+    const buildShellExportLines = (env: Record<string, string>): string[] => {
+      const lines: string[] = [];
+      for (const [key, value] of Object.entries(env)) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+          continue;
+        }
+        lines.push(`export ${key}=${shellSingleQuote(value)}`);
+      }
+      return lines;
+    };
+    const openInMacLogsDir = join(configuration.happyHomeDir, 'logs', 'open-in-mac');
+    const resumeLogPath = (resumeId: string): string => join(openInMacLogsDir, `${resumeId}.log`);
+    const tryOpenTerminalForResumeView = (
+      directory: string,
+      resumeId: string,
+      options?: { happySessionId?: string; pid?: number; tmuxSessionId?: string }
+    ) => {
+      if (process.platform !== 'darwin') {
+        return;
+      }
+      const envLines = buildShellExportLines({
+        HAPPY_HOME_DIR: configuration.happyHomeDir,
+        HAPPY_SERVER_URL: configuration.serverUrl
+      });
+      const monitorHint = options?.happySessionId
+        ? `echo ${shellSingleQuote(`Monitoring resumed session: ${options.happySessionId}`)}`
+        : `echo ${shellSingleQuote(`Monitoring resume id: ${resumeId}`)}`;
+      const processHint = options?.pid
+        ? `echo ${shellSingleQuote(`Claude host PID: ${options.pid}`)}`
+        : `echo ${shellSingleQuote('Claude host PID: unknown')}`;
+      const sessionLogPath = resumeLogPath(resumeId);
+      const tmuxAttachCommand = (() => {
+        if (!options?.tmuxSessionId) {
+          return null;
+        }
+        try {
+          const parsed = parseTmuxSessionIdentifier(options.tmuxSessionId);
+          const targetSession = parsed.session;
+          const targetWindow = parsed.window ? `${parsed.session}:${parsed.window}` : parsed.session;
+          return [
+            `tmux has-session -t ${shellSingleQuote(targetSession)} 2>/dev/null`,
+            `tmux select-window -t ${shellSingleQuote(targetWindow)} 2>/dev/null || true`,
+            `tmux attach -t ${shellSingleQuote(targetSession)}`
+          ].join(' && ');
+        } catch {
+          return null;
+        }
+      })();
+      const tailCommand = existsSync(sessionLogPath)
+        ? `tail -n 200 -f ${shellSingleQuote(sessionLogPath)}`
+        : (logger.logFilePath
+          ? `tail -n 120 -f ${shellSingleQuote(logger.logFilePath)}`
+          : `echo ${shellSingleQuote('No session log found')}`);
+      const mainViewCommand = tmuxAttachCommand || tailCommand;
+      const tmuxSessionLabel = options?.tmuxSessionId ?? 'unknown';
+      const command = [
+        ...envLines,
+        `cd ${shellSingleQuote(projectPath())}`,
+        `clear`,
+        `echo ${shellSingleQuote('Open in Mac view mode (mobile remains controller)')}`,
+        monitorHint,
+        processHint,
+        `echo ${shellSingleQuote(`Workspace: ${directory}`)}`,
+        options?.pid
+          ? `ps -p ${options.pid} -o pid=,ppid=,tty=,etime=,command= || true`
+          : `echo ${shellSingleQuote('No PID available for this resumed session')}`,
+        `yarn workspace happy-coder cli daemon list || true`,
+        tmuxAttachCommand
+          ? `echo ${shellSingleQuote(`Attaching tmux session: ${tmuxSessionLabel}`)}`
+          : `echo ${shellSingleQuote('tmux unavailable for this session, falling back to log tail')}`,
+        mainViewCommand
+      ].join(' && ');
+      const script = `tell application "Terminal" to activate\ntell application "Terminal" to do script "${appleScriptDoubleQuote(command)}"`;
+      const child = spawn('osascript', ['-e', script], { detached: true, stdio: 'ignore' });
+      child.unref();
+    };
+    const tryOpenTerminalForClaudeDirectLaunch = (directory: string, extraEnv: Record<string, string>, resumeId?: string, happySessionId?: string) => {
+      if (process.platform !== 'darwin') {
+        throw new Error('Terminal Direct mode is only supported on macOS');
+      }
+      const directLaunchEnv = Object.fromEntries(
+        Object.entries(extraEnv).filter(([key]) => !key.startsWith('TMUX_'))
+      );
+      const envLines = buildShellExportLines({
+        HAPPY_HOME_DIR: configuration.happyHomeDir,
+        HAPPY_SERVER_URL: configuration.serverUrl,
+        ...directLaunchEnv
+      });
+      const entrypoint = join(projectPath(), 'dist', 'index.mjs');
+      const commandArgs = [
+        shellSingleQuote(process.execPath),
+        '--no-warnings',
+        '--no-deprecation',
+        shellSingleQuote(entrypoint),
+        'claude',
+        '--started-by',
+        'terminal',
+        ...(happySessionId ? ['--happy-session-id', shellSingleQuote(happySessionId)] : []),
+        ...(resumeId ? ['--resume', shellSingleQuote(resumeId)] : [])
+      ];
+      const command = [
+        ...envLines,
+        `cd ${shellSingleQuote(directory)}`,
+        `clear`,
+        `echo ${shellSingleQuote(resumeId ? 'Open in Mac direct mode: launching Claude locally with --resume' : 'Open in Mac direct mode: launching Claude locally')}`,
+        commandArgs.join(' ')
+      ].join(' && ');
+      const script = `tell application "Terminal" to activate\ntell application "Terminal" to do script "${appleScriptDoubleQuote(command)}"`;
+      const child = spawn('osascript', ['-e', script], { detached: true, stdio: 'ignore' });
+      child.unref();
     };
 
     // Spawn a new session (sessionId reserved for future --resume functionality)
     const spawnSession = async (options: SpawnSessionOptions): Promise<SpawnSessionResult> => {
       logger.debugLargeJson('[DAEMON RUN] Spawning session', options);
 
-      const { directory, sessionId, machineId, approvedNewDirectoryCreation = true } = options;
+      const { directory, sessionId, happySessionId, machineId, openTerminal = false, approvedNewDirectoryCreation = true } = options;
       const resumeSessionId = typeof sessionId === 'string' && sessionId.trim() ? sessionId.trim() : undefined;
       const selectedAgent = options.agent === 'gemini' ? 'gemini' : (options.agent === 'codex' ? 'codex' : 'claude');
+      const requestedTerminalCarrierMode = openTerminal
+        ? (options.terminalCarrierMode === 'hosted' ? 'hosted' : 'direct')
+        : 'hosted';
       let directoryCreated = false;
 
       try {
@@ -368,6 +552,72 @@ export async function startDaemon(): Promise<void> {
           };
         }
 
+        if (openTerminal && requestedTerminalCarrierMode === 'direct') {
+          if (selectedAgent !== 'claude') {
+            return {
+              type: 'error',
+              errorMessage: `Terminal Direct mode currently supports only Claude sessions, received agent '${selectedAgent}'.`
+            };
+          }
+          const requestStartedAt = Date.now();
+          const requestedDirectoryNormalized = normalizeDirectoryForComparison(directory);
+          const awaiterId = `terminal-direct-${requestStartedAt}-${Math.random().toString(36).slice(2, 8)}`;
+          const externalSessionPromise = new Promise<TrackedSession | undefined>((resolve) => {
+            const timeout = setTimeout(() => {
+              externalSessionAwaiters.delete(awaiterId);
+              resolve(undefined);
+            }, 30_000);
+            externalSessionAwaiters.set(awaiterId, {
+              matches: (_reportedSessionId, sessionMetadata) => {
+                if (sessionMetadata.startedBy !== 'terminal') {
+                  return false;
+                }
+                if ((sessionMetadata.flavor ?? 'claude') !== 'claude') {
+                  return false;
+                }
+                const reportedDirectoryNormalized = normalizeDirectoryForComparison(sessionMetadata.path, sessionMetadata.homeDir);
+                if (requestedDirectoryNormalized && reportedDirectoryNormalized && requestedDirectoryNormalized !== reportedDirectoryNormalized) {
+                  return false;
+                }
+                if (machineId && sessionMetadata.machineId && sessionMetadata.machineId !== machineId) {
+                  return false;
+                }
+                if ((sessionMetadata.lifecycleStateSince ?? 0) + 2_000 < requestStartedAt) {
+                  return false;
+                }
+                if (resumeSessionId && sessionMetadata.claudeSessionId && sessionMetadata.claudeSessionId !== resumeSessionId) {
+                  return false;
+                }
+                return true;
+              },
+              resolve: (trackedSession) => {
+                clearTimeout(timeout);
+                resolve(trackedSession);
+              }
+            });
+          });
+          try {
+            tryOpenTerminalForClaudeDirectLaunch(directory, extraEnv, resumeSessionId, happySessionId);
+          } catch (error) {
+            externalSessionAwaiters.delete(awaiterId);
+            throw error;
+          }
+          const directLaunchResult = await externalSessionPromise;
+          if (!directLaunchResult?.happySessionId) {
+            return {
+              type: 'error',
+              errorMessage: resumeSessionId
+                ? `Terminal Direct mode opened Terminal but did not receive a Claude session webhook for resume '${resumeSessionId}' within 30 seconds.`
+                : 'Terminal Direct mode opened Terminal but did not receive a Claude session webhook within 30 seconds.'
+            };
+          }
+          directLaunchResult.directoryCreated = directoryCreated;
+          return {
+            type: 'success',
+            sessionId: directLaunchResult.happySessionId
+          };
+        }
+
         // Check if tmux is available and should be used
         const tmuxAvailable = await isTmuxAvailable();
         let useTmux = tmuxAvailable;
@@ -395,7 +645,7 @@ export async function startDaemon(): Promise<void> {
           // Construct command for the CLI
           const cliPath = join(projectPath(), 'dist', 'index.mjs');
           // Determine agent command - support claude, codex, and gemini
-          const fullCommand = `node --no-warnings --no-deprecation ${cliPath} ${selectedAgent} --happy-starting-mode remote --started-by daemon${resumeSessionId ? ` --resume ${resumeSessionId}` : ''}`;
+          const fullCommand = `node --no-warnings --no-deprecation ${cliPath} ${selectedAgent} --happy-starting-mode remote --started-by daemon${happySessionId ? ` --happy-session-id ${happySessionId}` : ''}${resumeSessionId ? ` --resume ${resumeSessionId}` : ''}`;
 
           // Spawn in tmux with environment variables
           // IMPORTANT: Pass complete environment (process.env + extraEnv) because:
@@ -435,6 +685,9 @@ export async function startDaemon(): Promise<void> {
               pid: tmuxResult.pid, // Real PID from tmux -P flag
               tmuxSessionId: tmuxResult.sessionId,
               directoryCreated,
+              requestedDirectory: directory,
+              requestedMachineId: machineId,
+              spawnedAt: Date.now(),
               message: directoryCreated
                 ? `The path '${directory}' did not exist. We created a new folder and spawned a new session in tmux session '${tmuxSessionName}'. Use 'tmux attach -t ${tmuxSessionName}' to view the session.`
                 : `Spawned new session in tmux session '${tmuxSessionName}'. Use 'tmux attach -t ${tmuxSessionName}' to view the session.`
@@ -461,6 +714,17 @@ export async function startDaemon(): Promise<void> {
               pidToAwaiter.set(tmuxResult.pid!, (completedSession) => {
                 clearTimeout(timeout);
                 logger.debug(`[DAEMON RUN] Session ${completedSession.happySessionId} fully spawned with webhook (tmux)`);
+                if (openTerminal && resumeSessionId && selectedAgent === 'claude') {
+                  try {
+                    tryOpenTerminalForResumeView(directory, resumeSessionId, {
+                      happySessionId: completedSession.happySessionId,
+                      pid: completedSession.pid,
+                      tmuxSessionId: completedSession.tmuxSessionId
+                    });
+                  } catch (error) {
+                    logger.debug('[DAEMON RUN] Failed to auto-open terminal for resumed session (tmux)', error);
+                  }
+                }
                 resolve({
                   type: 'success',
                   sessionId: completedSession.happySessionId!
@@ -501,6 +765,9 @@ export async function startDaemon(): Promise<void> {
             '--happy-starting-mode', 'remote',
             '--started-by', 'daemon'
           ];
+          if (happySessionId) {
+            args.push('--happy-session-id', happySessionId);
+          }
           if (resumeSessionId) {
             args.push('--resume', resumeSessionId);
           }
@@ -533,12 +800,26 @@ export async function startDaemon(): Promise<void> {
           }
 
           logger.debug(`[DAEMON RUN] Spawned process with PID ${happyProcess.pid}`);
+          let sessionOutputStream: ReturnType<typeof createWriteStream> | undefined;
+          if (resumeSessionId && selectedAgent === 'claude') {
+            mkdirSync(openInMacLogsDir, { recursive: true });
+            const outputPath = resumeLogPath(resumeSessionId);
+            sessionOutputStream = createWriteStream(outputPath, { flags: 'a' });
+            const appendOutput = (chunk: Buffer | string) => {
+              sessionOutputStream?.write(chunk.toString());
+            };
+            happyProcess.stdout?.on('data', appendOutput);
+            happyProcess.stderr?.on('data', appendOutput);
+          }
 
           const trackedSession: TrackedSession = {
             startedBy: 'daemon',
             pid: happyProcess.pid,
             childProcess: happyProcess,
             directoryCreated,
+            requestedDirectory: directory,
+            requestedMachineId: machineId,
+            spawnedAt: Date.now(),
             message: directoryCreated ? `The path '${directory}' did not exist. We created a new folder and spawned a new session there.` : undefined
           };
 
@@ -546,6 +827,7 @@ export async function startDaemon(): Promise<void> {
 
           happyProcess.on('exit', (code, signal) => {
             logger.debug(`[DAEMON RUN] Child PID ${happyProcess.pid} exited with code ${code}, signal ${signal}`);
+            sessionOutputStream?.end();
             if (happyProcess.pid) {
               onChildExited(happyProcess.pid);
             }
@@ -553,6 +835,7 @@ export async function startDaemon(): Promise<void> {
 
           happyProcess.on('error', (error) => {
             logger.debug(`[DAEMON RUN] Child process error:`, error);
+            sessionOutputStream?.end();
             if (happyProcess.pid) {
               onChildExited(happyProcess.pid);
             }
@@ -578,6 +861,16 @@ export async function startDaemon(): Promise<void> {
             pidToAwaiter.set(happyProcess.pid!, (completedSession) => {
               clearTimeout(timeout);
               logger.debug(`[DAEMON RUN] Session ${completedSession.happySessionId} fully spawned with webhook`);
+              if (openTerminal && resumeSessionId && selectedAgent === 'claude') {
+                try {
+                  tryOpenTerminalForResumeView(directory, resumeSessionId, {
+                    happySessionId: completedSession.happySessionId,
+                    pid: completedSession.pid
+                  });
+                } catch (error) {
+                  logger.debug('[DAEMON RUN] Failed to auto-open terminal for resumed session', error);
+                }
+              }
               resolve({
                 type: 'success',
                 sessionId: completedSession.happySessionId!

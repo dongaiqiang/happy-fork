@@ -3,7 +3,7 @@ import { logger } from '@/ui/logger'
 import type { AgentState, CreateSessionResponse, Metadata, Session, Machine, MachineMetadata, DaemonState } from '@/api/types'
 import { ApiSessionClient } from './apiSession';
 import { ApiMachineClient } from './apiMachine';
-import { decodeBase64, encodeBase64, getRandomBytes, encrypt, decrypt, libsodiumEncryptForPublicKey } from './encryption';
+import { decodeBase64, encodeBase64, getRandomBytes, encrypt, decrypt, libsodiumDecryptFromPublicKeyBundle, libsodiumEncryptForPublicKey } from './encryption';
 import { PushNotificationClient } from './pushNotifications';
 import { configuration } from '@/configuration';
 import chalk from 'chalk';
@@ -11,6 +11,42 @@ import { Credentials } from '@/persistence';
 import { connectionState, isNetworkError } from '@/utils/serverConnectionErrors';
 
 export class ApiClient {
+
+  private hydrateSession(raw: CreateSessionResponse['session']): Session {
+    let encryptionKey: Uint8Array;
+    let encryptionVariant: 'legacy' | 'dataKey';
+
+    if (this.credential.encryption.type === 'dataKey') {
+      const encodedDataKey = raw.dataEncryptionKey;
+      if (!encodedDataKey) {
+        throw new Error(`Session ${raw.id} is missing data encryption key`);
+      }
+
+      const bundledDataKey = decodeBase64(encodedDataKey);
+      const versionedBundle = bundledDataKey[0] === 0 ? bundledDataKey.slice(1) : bundledDataKey;
+      const decryptedDataKey = libsodiumDecryptFromPublicKeyBundle(versionedBundle, this.credential.encryption.machineKey);
+      if (!decryptedDataKey) {
+        throw new Error(`Failed to decrypt data encryption key for session ${raw.id}`);
+      }
+
+      encryptionKey = decryptedDataKey;
+      encryptionVariant = 'dataKey';
+    } else {
+      encryptionKey = this.credential.encryption.secret;
+      encryptionVariant = 'legacy';
+    }
+
+    return {
+      id: raw.id,
+      seq: raw.seq,
+      metadata: decrypt(encryptionKey, encryptionVariant, decodeBase64(raw.metadata)),
+      metadataVersion: raw.metadataVersion,
+      agentState: raw.agentState ? decrypt(encryptionKey, encryptionVariant, decodeBase64(raw.agentState)) : null,
+      agentStateVersion: raw.agentStateVersion,
+      encryptionKey,
+      encryptionVariant
+    }
+  }
 
   static async create(credential: Credentials) {
     return new ApiClient(credential);
@@ -75,18 +111,7 @@ export class ApiClient {
       )
 
       logger.debug(`Session created/loaded: ${response.data.session.id} (tag: ${opts.tag})`)
-      let raw = response.data.session;
-      let session: Session = {
-        id: raw.id,
-        seq: raw.seq,
-        metadata: decrypt(encryptionKey, encryptionVariant, decodeBase64(raw.metadata)),
-        metadataVersion: raw.metadataVersion,
-        agentState: raw.agentState ? decrypt(encryptionKey, encryptionVariant, decodeBase64(raw.agentState)) : null,
-        agentStateVersion: raw.agentStateVersion,
-        encryptionKey: encryptionKey,
-        encryptionVariant: encryptionVariant
-      }
-      return session;
+      return this.hydrateSession(response.data.session);
     } catch (error) {
       logger.debug('[API] [ERROR] Failed to get or create session:', error);
 
@@ -133,6 +158,26 @@ export class ApiClient {
       }
 
       throw new Error(`Failed to get or create session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async getSessionById(sessionId: string): Promise<Session> {
+    try {
+      const response = await axios.get<{ session: CreateSessionResponse['session'] }>(
+        `${configuration.serverUrl}/v1/sessions/${sessionId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.credential.token}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 60000
+        }
+      );
+
+      logger.debug(`Session loaded by id: ${response.data.session.id}`);
+      return this.hydrateSession(response.data.session);
+    } catch (error) {
+      throw new Error(`Failed to load session ${sessionId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

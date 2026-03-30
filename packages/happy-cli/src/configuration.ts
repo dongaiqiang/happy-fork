@@ -10,6 +10,39 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import packageJson from '../package.json'
 
+const stripWrappingQuotes = (value: string): string => {
+  let current = value.trim()
+  while (current.length >= 2) {
+    const first = current[0]
+    const last = current[current.length - 1]
+    const wrapped = (
+      (first === "'" && last === "'")
+      || (first === '"' && last === '"')
+      || (first === '`' && last === '`')
+    )
+    if (!wrapped) {
+      break
+    }
+    current = current.slice(1, -1).trim()
+  }
+  return current
+}
+
+const sanitizeUrlEnv = (rawValue: string | undefined, fallback: string, envName: string): string => {
+  const normalized = stripWrappingQuotes(rawValue || '')
+  if (!normalized) {
+    return fallback
+  }
+  try {
+    const parsed = new URL(normalized)
+    return parsed.toString().replace(/\/$/, '')
+  } catch {
+    console.warn(`⚠️  WARNING: invalid ${envName}: ${rawValue}`)
+    console.warn(`   Falling back to: ${fallback}`)
+    return fallback
+  }
+}
+
 class Configuration {
   public readonly serverUrl: string
   public readonly webappUrl: string
@@ -28,9 +61,12 @@ class Configuration {
   public readonly disableCaffeinate: boolean
 
   constructor() {
-    // Server configuration - priority: parameter > environment > default
-    this.serverUrl = process.env.HAPPY_SERVER_URL || 'http://localhost:3005'
-    this.webappUrl = process.env.HAPPY_WEBAPP_URL || process.env.EXPO_PUBLIC_SERVER_URL || 'http://localhost:8083'
+    this.serverUrl = sanitizeUrlEnv(process.env.HAPPY_SERVER_URL, 'http://localhost:3005', 'HAPPY_SERVER_URL')
+    this.webappUrl = sanitizeUrlEnv(
+      process.env.HAPPY_WEBAPP_URL || process.env.EXPO_PUBLIC_SERVER_URL,
+      'http://localhost:8083',
+      process.env.HAPPY_WEBAPP_URL ? 'HAPPY_WEBAPP_URL' : 'EXPO_PUBLIC_SERVER_URL'
+    )
 
     // Check if we're running as daemon based on process args
     const args = process.argv.slice(2)

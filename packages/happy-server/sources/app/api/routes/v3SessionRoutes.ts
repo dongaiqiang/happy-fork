@@ -28,6 +28,8 @@ const handoffMacBodySchema = controlStateBodySchema.extend({
     machineId: z.string().min(1),
     directory: z.string().min(1),
     claudeSessionId: z.string().min(1),
+    openTerminal: z.boolean().optional(),
+    terminalCarrierMode: z.enum(['direct', 'hosted']).optional(),
     approvedNewDirectoryCreation: z.boolean().optional()
 });
 const controllerSwitchBodySchema = controlStateBodySchema.extend({
@@ -380,7 +382,7 @@ export function v3SessionRoutes(app: Fastify) {
     }, async (request, reply) => {
         const userId = request.userId;
         const { sessionId } = request.params;
-        const { expectedLeaseVersion, machineId, directory, claudeSessionId, approvedNewDirectoryCreation = false } = request.body;
+        const { expectedLeaseVersion, machineId, directory, claudeSessionId, openTerminal = true, terminalCarrierMode = 'direct', approvedNewDirectoryCreation = false } = request.body;
         const current = await loadSessionControlState(userId, sessionId);
         if (!current) {
             return reply.code(404).send({ error: 'Session not found' });
@@ -427,35 +429,6 @@ export function v3SessionRoutes(app: Fastify) {
             }
             await emitSessionControlStateUpdate(userId, switchingState);
 
-        const sessionWithKey = await db.session.findFirst({
-            where: {
-                id: sessionId,
-                accountId: userId
-            },
-            select: {
-                dataEncryptionKey: true
-            }
-        });
-        if (!sessionWithKey?.dataEncryptionKey) {
-            await db.session.updateMany({
-                where: { id: sessionId, accountId: userId },
-                data: {
-                    handoffState: 'failed',
-                    handoffReason: 'missing-session-encryption-key',
-                    controllerUpdatedAt: new Date()
-                }
-            });
-            const failedState = await loadSessionControlState(userId, sessionId);
-            if (failedState) {
-                await emitSessionControlStateUpdate(userId, failedState);
-            }
-            return reply.code(500).send({
-                success: false,
-                error: 'missing-session-encryption-key',
-                state: failedState ? toControlStateResponse(failedState) : null
-            });
-        }
-
         const machineWithKey = await db.machine.findFirst({
             where: {
                 id: machineId,
@@ -488,42 +461,6 @@ export function v3SessionRoutes(app: Fastify) {
         }
 
         const connections = eventRouter.getConnections(userId);
-        const sessionConnection = connections
-            ? Array.from(connections).find((connection) => (
-                connection.connectionType === 'session-scoped'
-                && connection.sessionId === sessionId
-                && connection.socket.connected
-            ))
-            : undefined;
-
-        if (sessionConnection && sessionConnection.connectionType === 'session-scoped') {
-            const stopResult = await callConnectionRpcWithVariantRetry(
-                sessionConnection.socket,
-                `${sessionId}:stopSession`,
-                {},
-                new Uint8Array(sessionWithKey.dataEncryptionKey)
-            );
-            if (!stopResult.success) {
-                await db.session.updateMany({
-                    where: { id: sessionId, accountId: userId },
-                    data: {
-                        handoffState: 'failed',
-                        handoffReason: `stop-failed:${stopResult.error ?? 'unknown'}`,
-                        controllerUpdatedAt: new Date()
-                    }
-                });
-                const failedState = await loadSessionControlState(userId, sessionId);
-                if (failedState) {
-                    await emitSessionControlStateUpdate(userId, failedState);
-                }
-                return reply.code(502).send({
-                    success: false,
-                    error: 'stop-failed',
-                    state: failedState ? toControlStateResponse(failedState) : null
-                });
-            }
-        }
-
         const machineConnection = connections
             ? Array.from(connections).find((connection) => (
                 connection.connectionType === 'machine-scoped'
@@ -557,7 +494,10 @@ export function v3SessionRoutes(app: Fastify) {
             {
                 directory,
                 sessionId: claudeSessionId,
+                happySessionId: sessionId,
                 machineId,
+                openTerminal,
+                terminalCarrierMode,
                 approvedNewDirectoryCreation,
                 agent: 'claude'
             },

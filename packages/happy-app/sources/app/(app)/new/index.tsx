@@ -99,6 +99,63 @@ const getRecentPathForMachine = (machineId: string | null, recentPaths: Array<{ 
     return pathsWithTimestamps[0]?.path || defaultPath;
 };
 
+const findRecentlyCreatedSession = (
+    machineId: string,
+    directory: string,
+    startedAt: number
+) => {
+    const normalizePath = (value: string | undefined) => {
+        if (!value) {
+            return undefined;
+        }
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return undefined;
+        }
+        if (trimmed.length > 1 && trimmed.endsWith('/')) {
+            return trimmed.replace(/\/+$/, '');
+        }
+        return trimmed;
+    };
+
+    const normalizedDirectory = normalizePath(directory);
+    return Object.values(storage.getState().sessions)
+        .filter(session => {
+            if (session.metadata?.machineId !== machineId) {
+                return false;
+            }
+            if (session.createdAt < startedAt - 10_000) {
+                return false;
+            }
+            const sessionPath = normalizePath(session.metadata?.path);
+            if (normalizedDirectory && sessionPath && normalizedDirectory === sessionPath) {
+                return true;
+            }
+            return session.createdAt >= startedAt - 2_000;
+        })
+        .sort((a, b) => b.createdAt - a.createdAt)[0];
+};
+
+const findNewlySpawnedSession = (
+    previousSessionIds: Set<string>,
+    machineId: string,
+    directory: string,
+    startedAt: number
+) => {
+    const candidates = Object.values(storage.getState().sessions)
+        .filter(session => !previousSessionIds.has(session.id))
+        .filter(session => session.metadata?.machineId === machineId)
+        .filter(session => session.createdAt >= startedAt - 10_000)
+        .sort((a, b) => b.createdAt - a.createdAt);
+
+    if (candidates.length === 1) {
+        return candidates[0];
+    }
+
+    return candidates.find(session => session.metadata?.path === directory)
+        ?? findRecentlyCreatedSession(machineId, directory, startedAt);
+};
+
 // Configuration constants
 const RECENT_PATHS_DEFAULT_VISIBLE = 5;
 const STATUS_ITEM_GAP = 11; // Spacing between status items (machine, CLI) - ~2 character spaces at 11px font
@@ -308,7 +365,6 @@ function NewSessionWizard() {
     const profileMap = useProfileMap(allProfiles);
     const machines = useAllMachines();
     const sessions = useSessions();
-
     // Wizard state
     const [selectedProfileId, setSelectedProfileId] = React.useState<string | null>(() => {
         if (lastUsedProfile && profileMap.has(lastUsedProfile)) {
@@ -995,10 +1051,8 @@ function NewSessionWizard() {
         try {
             let actualPath = selectedPath;
 
-            // Handle worktree creation
             if (sessionType === 'worktree' && experimentsEnabled) {
                 const worktreeResult = await createWorktree(selectedMachineId, selectedPath);
-
                 if (!worktreeResult.success) {
                     if (worktreeResult.error === 'Not a Git repository') {
                         Modal.alert(t('common.error'), t('newSession.worktree.notGitRepo'));
@@ -1008,11 +1062,9 @@ function NewSessionWizard() {
                     setIsCreating(false);
                     return;
                 }
-
                 actualPath = worktreeResult.worktreePath;
             }
 
-            // Save settings
             const updatedPaths = [{ machineId: selectedMachineId, path: selectedPath }, ...recentMachinePaths.filter(rp => rp.machineId !== selectedMachineId)].slice(0, 10);
             sync.applySettings({
                 recentMachinePaths: updatedPaths,
@@ -1022,7 +1074,6 @@ function NewSessionWizard() {
                 lastUsedModelMode: modelMode?.key ?? null,
             });
 
-            // Get environment variables from selected profile
             let environmentVariables = undefined;
             if (selectedProfileId) {
                 const selectedProfile = profileMap.get(selectedProfileId);
@@ -1031,39 +1082,69 @@ function NewSessionWizard() {
                 }
             }
 
-            const result = await machineSpawnNewSession({
+            const sessionSpawnStartedAt = Date.now();
+            const previousSessionIds = new Set(Object.keys(storage.getState().sessions));
+            const spawnOptions = {
                 machineId: selectedMachineId,
                 directory: actualPath,
                 approvedNewDirectoryCreation: true,
                 agent: agentType,
                 environmentVariables
-            });
+            } as const;
 
-            if ('sessionId' in result && result.sessionId) {
-                // Clear draft state on successful session creation
-                clearNewSessionDraft();
+            let result = await machineSpawnNewSession(spawnOptions);
 
+            if (result.type === 'requestToApproveDirectoryCreation') {
+                const approved = await Modal.confirm(
+                    t('newSession.directoryDoesNotExist'),
+                    t('newSession.createDirectoryConfirm', { directory: result.directory }),
+                    { cancelText: t('common.cancel'), confirmText: t('common.create') }
+                );
+                if (!approved) {
+                    setIsCreating(false);
+                    return;
+                }
+                result = await machineSpawnNewSession(spawnOptions);
+            }
+
+            let sessionId: string | undefined;
+            if (result.type === 'success') {
+                sessionId = result.sessionId;
+            } else if (result.type === 'error') {
                 await sync.refreshSessions();
-
-                // Set permission mode and model mode on the session
-                storage.getState().updateSessionPermissionMode(result.sessionId, permissionMode.key);
-                if (modelMode) {
-                    storage.getState().updateSessionModelMode(result.sessionId, modelMode.key);
+                sessionId = findNewlySpawnedSession(previousSessionIds, selectedMachineId, actualPath, sessionSpawnStartedAt)?.id;
+                if (!sessionId) {
+                    throw new Error(result.errorMessage);
                 }
+            }
 
-                // Send initial message if provided
-                if (sessionPrompt.trim()) {
-                    await sync.sendMessage(result.sessionId, sessionPrompt);
-                }
+            if (!sessionId) {
+                await sync.refreshSessions();
+                sessionId = findNewlySpawnedSession(previousSessionIds, selectedMachineId, actualPath, sessionSpawnStartedAt)?.id;
+            }
 
-                router.replace(`/session/${result.sessionId}`, {
-                    dangerouslySingular() {
-                        return 'session'
-                    },
-                });
-            } else {
+            if (!sessionId) {
                 throw new Error('Session spawning failed - no session ID returned.');
             }
+
+            clearNewSessionDraft();
+
+            await sync.refreshSessions();
+
+            storage.getState().updateSessionPermissionMode(sessionId, permissionMode.key);
+            if (modelMode) {
+                storage.getState().updateSessionModelMode(sessionId, modelMode.key);
+            }
+
+            if (sessionPrompt.trim()) {
+                await sync.sendMessage(sessionId, sessionPrompt);
+            }
+
+            router.replace(`/session/${sessionId}`, {
+                dangerouslySingular() {
+                    return 'session'
+                },
+            });
         } catch (error) {
             console.error('Failed to start session', error);
             let errorMessage = 'Failed to start session. Make sure the daemon is running on the target machine.';
@@ -1072,6 +1153,8 @@ function NewSessionWizard() {
                     errorMessage = 'Session startup timed out. The machine may be slow or the daemon may not be responding.';
                 } else if (error.message.includes('Socket not connected')) {
                     errorMessage = 'Not connected to server. Check your internet connection.';
+                } else if (error.message.trim()) {
+                    errorMessage = error.message;
                 }
             }
             Modal.alert(t('common.error'), errorMessage);

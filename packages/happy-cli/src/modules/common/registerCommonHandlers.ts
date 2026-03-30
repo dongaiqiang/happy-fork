@@ -119,6 +119,9 @@ export interface SpawnSessionOptions {
     machineId?: string;
     directory: string;
     sessionId?: string;
+    happySessionId?: string;
+    openTerminal?: boolean;
+    terminalCarrierMode?: 'direct' | 'hosted';
     approvedNewDirectoryCreation?: boolean;
     agent?: 'claude' | 'codex' | 'gemini';
     token?: string;

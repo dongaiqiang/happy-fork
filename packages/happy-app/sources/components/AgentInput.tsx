@@ -74,6 +74,7 @@ interface AgentInputProps {
     currentPath?: string | null;
     onPathClick?: () => void;
     isSendDisabled?: boolean;
+    isReadOnly?: boolean;
     isSending?: boolean;
     minHeight?: number;
     profileId?: string | null;
@@ -502,7 +503,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
 
         // Original key handling
         if (Platform.OS === 'web') {
-            if (agentInputEnterToSend && event.key === 'Enter' && !event.shiftKey) {
+            if (!props.isReadOnly && agentInputEnterToSend && event.key === 'Enter' && !event.shiftKey) {
                 if (props.value.trim()) {
                     props.onSend();
                     return true; // Key was handled
@@ -952,6 +953,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                             paddingBottom={Platform.OS === 'web' ? 10 : 8}
                             onChangeText={props.onChangeText}
                             placeholder={props.placeholder}
+                            editable={!props.isReadOnly}
                             onKeyPress={handleKeyPress}
                             onStateChange={handleInputStateChange}
                             maxHeight={120}
@@ -1104,10 +1106,10 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                                     <SmartVoiceButton
                                         hasText={hasText}
                                         isSending={props.isSending}
-                                        isSendDisabled={props.isSendDisabled}
+                                        isSendDisabled={props.isSendDisabled || props.isReadOnly}
                                         onSend={props.onSend}
-                                        onMicPress={props.onMicPress}
-                                        isMicActive={props.isMicActive}
+                                        onMicPress={props.isReadOnly ? undefined : props.onMicPress}
+                                        isMicActive={props.isReadOnly ? false : props.isMicActive}
                                         styles={styles}
                                         sessionId={props.sessionId}
                                         onTextUpdate={props.onChangeText}

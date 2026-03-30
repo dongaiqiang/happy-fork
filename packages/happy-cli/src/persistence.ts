@@ -10,7 +10,7 @@ import { existsSync, writeFileSync, readFileSync, unlinkSync } from 'node:fs'
 import { constants } from 'node:fs'
 import { configuration } from '@/configuration'
 import * as z from 'zod';
-import { encodeBase64 } from '@/api/encryption';
+import { encodeBase64, libsodiumPublicKeyFromSecretKey } from '@/api/encryption';
 import { logger } from '@/ui/logger';
 
 // AI backend profile schema - MUST match happy app exactly
@@ -428,6 +428,7 @@ export async function updateSettings(
 const credentialsSchema = z.object({
   token: z.string(),
   secret: z.string().base64().nullish(), // Legacy
+  dataKeyVersion: z.number().int().nullish(),
   encryption: z.object({
     publicKey: z.string().base64(),
     machineKey: z.string().base64()
@@ -459,12 +460,50 @@ export async function readCredentials(): Promise<Credentials | null> {
         }
       };
     } else if (credentials.encryption) {
+      const storedPublicKey = new Uint8Array(Buffer.from(credentials.encryption.publicKey, 'base64'))
+      const storedMachineKey = new Uint8Array(Buffer.from(credentials.encryption.machineKey, 'base64'))
+      if (credentials.dataKeyVersion === 2) {
+        return {
+          token: credentials.token,
+          encryption: {
+            type: 'dataKey',
+            publicKey: storedPublicKey,
+            machineKey: storedMachineKey
+          }
+        }
+      }
+
+      const derivedPublicKey = libsodiumPublicKeyFromSecretKey(storedMachineKey)
+      if (Buffer.from(derivedPublicKey).equals(Buffer.from(storedPublicKey))) {
+        await writeCredentialsDataKey({
+          publicKey: storedPublicKey,
+          machineKey: storedMachineKey,
+          token: credentials.token
+        })
+        return {
+          token: credentials.token,
+          encryption: {
+            type: 'dataKey',
+            publicKey: storedPublicKey,
+            machineKey: storedMachineKey
+          }
+        }
+      }
+
+      const migratedMachineKey = storedPublicKey
+      const migratedPublicKey = libsodiumPublicKeyFromSecretKey(migratedMachineKey)
+      await writeCredentialsDataKey({
+        publicKey: migratedPublicKey,
+        machineKey: migratedMachineKey,
+        token: credentials.token
+      })
+
       return {
         token: credentials.token,
         encryption: {
           type: 'dataKey',
-          publicKey: new Uint8Array(Buffer.from(credentials.encryption.publicKey, 'base64')),
-          machineKey: new Uint8Array(Buffer.from(credentials.encryption.machineKey, 'base64'))
+          publicKey: migratedPublicKey,
+          machineKey: migratedMachineKey
         }
       }
     }
@@ -489,6 +528,7 @@ export async function writeCredentialsDataKey(credentials: { publicKey: Uint8Arr
     await mkdir(configuration.happyHomeDir, { recursive: true })
   }
   await writeFile(configuration.privateKeyFile, JSON.stringify({
+    dataKeyVersion: 2,
     encryption: { publicKey: encodeBase64(credentials.publicKey), machineKey: encodeBase64(credentials.machineKey) },
     token: credentials.token
   }, null, 2));
