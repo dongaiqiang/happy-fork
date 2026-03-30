@@ -11,7 +11,7 @@ import { storage, useSession, useIsDataReady, useMachine, useAllMachines } from 
 import { getSessionName, useSessionStatus, formatOSPlatform, formatPathRelativeToHome, getSessionAvatarId } from '@/utils/sessionUtils';
 import * as Clipboard from 'expo-clipboard';
 import { Modal } from '@/modal';
-import { machineSpawnNewSession, sessionKill, sessionStop, sessionDelete, sessionGetControlState, sessionHandoffToMac, type SessionControlState } from '@/sync/ops';
+import { machineSpawnNewSession, sessionKill, sessionStop, sessionDelete, sessionGetControlState, sessionHandoffToMac, sessionSwitch, sessionSwitchController, type SessionControlState } from '@/sync/ops';
 import { useUnistyles } from 'react-native-unistyles';
 import { layout } from '@/components/layout';
 import { t } from '@/text';
@@ -336,6 +336,10 @@ function SessionInfoContent({ session }: { session: Session }) {
         && !session.active
         && isResumeCapableSession;
     const canOpenInMac = isResumeCapableSession;
+    const isSwitchingControl = effectiveControlState?.handoffState === 'switching';
+    const isMacController = effectiveControlState?.controller === 'mac' && effectiveControlState?.handoffState === 'idle';
+    const canSwitchControlToMac = canOpenInMac && !isSwitchingControl && !isMacController;
+    const canSwitchControlToMobile = !isSwitchingControl && isMacController;
 
     const [handingOffToMac, performHandoffToMac] = useHappyAction(async () => {
         const machineId = session.metadata?.machineId;
@@ -398,7 +402,7 @@ function SessionInfoContent({ session }: { session: Session }) {
                 await syncToResumedSession(spawnResult.sessionId);
                 Modal.alert(t('common.success'), spawnResult.sessionId && spawnResult.sessionId !== session.id
                     ? '已在 Mac 打开 Claude 会话，并切换到新的同步会话'
-                    : '已在 Mac 打开 Claude 会话');
+                    : '已在 Mac 打开 Claude 会话，当前仍由手机端控制');
                 return;
             }
             const reasonHint = reason.includes('claude-session-not-found')
@@ -412,8 +416,53 @@ function SessionInfoContent({ session }: { session: Session }) {
         await syncToResumedSession(result.resumedHappySessionId);
         Modal.alert(t('common.success'), result.resumedHappySessionId && result.resumedHappySessionId !== session.id
             ? '已在 Mac 打开 Claude 会话，并切换到新的同步会话'
-            : '已在 Mac 打开 Claude 会话');
+            : '已在 Mac 打开 Claude 会话，当前仍由手机端控制');
     });
+
+    const switchController = useCallback(async (targetController: 'mobile' | 'mac') => {
+        const expectedLeaseVersion = effectiveControlState?.leaseVersion ?? 0;
+
+        if (targetController === 'mac') {
+            const switched = await sessionSwitch(session.id, 'local');
+            if (!switched) {
+                throw new HappyError('切换到 Mac 控制失败：会话没有接受切换请求。', false);
+            }
+        } else {
+            const switched = await sessionSwitch(session.id, 'remote');
+            if (!switched) {
+                throw new HappyError('切回手机控制失败：会话没有接受切换请求。', false);
+            }
+        }
+
+        const result = await sessionSwitchController({
+            sessionId: session.id,
+            targetController,
+            expectedLeaseVersion
+        });
+        if (!result.success) {
+            throw new HappyError(result.message || result.error || 'controller-switch-failed', false);
+        }
+
+        await sync.refreshSessions();
+        await refreshControlState();
+
+        Modal.alert(
+            t('common.success'),
+            targetController === 'mac'
+                ? '已切换为 Mac 控制，手机端现在只读'
+                : '已切回手机控制，Mac 端现在只读'
+        );
+    }, [effectiveControlState?.leaseVersion, refreshControlState, session.id]);
+
+    const [switchingToMac, performSwitchToMac] = useHappyAction(async () => {
+        await switchController('mac');
+    });
+
+    const [switchingToMobile, performSwitchToMobile] = useHappyAction(async () => {
+        await switchController('mobile');
+    });
+
+    const switchingControl = switchingToMac || switchingToMobile;
 
     const handleOpenInMac = useCallback(() => {
         if (handingOffToMac) {
@@ -422,7 +471,7 @@ function SessionInfoContent({ session }: { session: Session }) {
         }
         Modal.alert(
             'Open in Mac',
-            'Switch control to Mac for this session?',
+            'Open this session on Mac in view mode? Mobile stays controller until you explicitly switch.',
             [
                 { text: t('common.cancel'), style: 'cancel' },
                 {
@@ -598,9 +647,25 @@ function SessionInfoContent({ session }: { session: Session }) {
                     {canOpenInMac && (
                         <Item
                             title="Open in Mac"
-                            subtitle={handingOffToMac ? 'Switching control to Mac...' : 'Stop mobile control and resume this session on Mac'}
+                            subtitle={handingOffToMac ? 'Opening session on Mac...' : 'Open the same session on Mac while mobile stays controller'}
                             icon={<Ionicons name="desktop-outline" size={29} color="#5856D6" />}
                             onPress={handleOpenInMac}
+                        />
+                    )}
+                    {canSwitchControlToMac && (
+                        <Item
+                            title="Switch Control to Mac"
+                            subtitle={switchingControl ? 'Switching control to Mac...' : 'Make Mac writable and keep mobile read-only'}
+                            icon={<Ionicons name="swap-horizontal-outline" size={29} color="#5856D6" />}
+                            onPress={performSwitchToMac}
+                        />
+                    )}
+                    {canSwitchControlToMobile && (
+                        <Item
+                            title="Switch Control to Mobile"
+                            subtitle={switchingControl ? 'Switching control to mobile...' : 'Return write control to mobile and keep Mac read-only'}
+                            icon={<Ionicons name="phone-portrait-outline" size={29} color="#34C759" />}
+                            onPress={performSwitchToMobile}
                         />
                     )}
                     {!sessionStatus.isConnected && !session.active && (

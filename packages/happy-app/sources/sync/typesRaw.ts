@@ -26,6 +26,10 @@ function isSessionProtocolSendEnabled(): boolean {
     return raw === '1' || raw === 'true' || raw === 'yes';
 }
 
+function shouldNormalizeUserSessionEnvelope(meta: MessageMeta | undefined): boolean {
+    return isSessionProtocolSendEnabled() || meta?.sentFrom === 'cli';
+}
+
 const agentEventSchema = z.discriminatedUnion('type', [z.object({
     type: z.literal('switch'),
     mode: z.enum(['local', 'remote'])
@@ -592,7 +596,7 @@ function normalizeSessionEnvelope(
 
     if (envelope.ev.t === 'text') {
         if (envelope.role === 'user') {
-            if (!isSessionProtocolSendEnabled()) {
+            if (!shouldNormalizeUserSessionEnvelope(meta)) {
                 return null;
             }
 

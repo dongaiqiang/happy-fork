@@ -555,8 +555,6 @@ export function v3SessionRoutes(app: Fastify) {
                 handoffState: 'switching'
             },
             data: {
-                controller: 'mac',
-                controllerLeaseVersion: expectedLeaseVersion + 1,
                 handoffState: 'idle',
                 handoffReason: null,
                 controllerUpdatedAt: new Date()

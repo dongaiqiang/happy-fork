@@ -1617,6 +1617,30 @@ describe('Zod Transform - WOLOG Content Normalization', () => {
             expect(normalized).toBeNull();
         });
 
+        it('uses modern user session envelopes from cli when send flag is disabled', () => {
+            const normalized = normalizeRawMessage('db-modern-user-cli-1', null, 1, {
+                role: 'session',
+                content: {
+                    id: 'env-modern-user-cli-1',
+                    time: 1,
+                    role: 'user',
+                    ev: { t: 'text', text: 'modern cli user envelope' }
+                },
+                meta: {
+                    sentFrom: 'cli'
+                }
+            } as any);
+
+            expect(normalized).toBeTruthy();
+            expect(normalized?.role).toBe('user');
+            if (normalized && normalized.role === 'user') {
+                expect(normalized.content).toEqual({
+                    type: 'text',
+                    text: 'modern cli user envelope'
+                });
+            }
+        });
+
         it('uses modern user session envelopes for user content when send flag is enabled', () => {
             process.env.ENABLE_SESSION_PROTOCOL_SEND = 'true';
 

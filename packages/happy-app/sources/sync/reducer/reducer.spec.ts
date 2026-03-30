@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { NormalizedMessage } from '../typesRaw';
+import { NormalizedMessage, normalizeRawMessage } from '../typesRaw';
 import { createReducer } from './reducer';
 import { reducer } from './reducer';
 import { AgentState } from '../storageTypes';
@@ -294,6 +294,68 @@ describe('reducer', () => {
             expect(result.messages[3].kind).toBe('agent-text');
             if (result.messages[3].kind === 'agent-text') {
                 expect(result.messages[3].text).toBe('Answer 2');
+            }
+        });
+
+        it('should keep cli local user input and following agent reply visible for session protocol messages', () => {
+            const state = createReducer();
+            const rawMessages = [
+                {
+                    id: 'msg-cli-user-1',
+                    localId: null,
+                    createdAt: 1000,
+                    content: {
+                        role: 'session',
+                        content: {
+                            id: 'env-cli-user-1',
+                            time: 1000,
+                            role: 'user',
+                            ev: { t: 'text', text: '你好' }
+                        },
+                        meta: {
+                            sentFrom: 'cli'
+                        }
+                    }
+                },
+                {
+                    id: 'msg-cli-agent-1',
+                    localId: null,
+                    createdAt: 1001,
+                    content: {
+                        role: 'session',
+                        content: {
+                            id: 'env-cli-agent-1',
+                            time: 1001,
+                            role: 'agent',
+                            turn: 'turn-cli-1',
+                            ev: { t: 'text', text: '你好，有什么可以帮你？' }
+                        },
+                        meta: {
+                            sentFrom: 'cli'
+                        }
+                    }
+                }
+            ] as const;
+
+            const normalized = rawMessages
+                .map((message) => normalizeRawMessage(
+                    message.id,
+                    message.localId,
+                    message.createdAt,
+                    message.content as any
+                ))
+                .filter((message): message is NormalizedMessage => message !== null);
+
+            const result = reducer(state, normalized);
+
+            expect(result.messages).toHaveLength(2);
+            expect(result.messages[0].kind).toBe('user-text');
+            expect(result.messages[1].kind).toBe('agent-text');
+            if (result.messages[0].kind === 'user-text') {
+                expect(result.messages[0].text).toBe('你好');
+            }
+            if (result.messages[1].kind === 'agent-text') {
+                expect(result.messages[1].text).toBe('你好，有什么可以帮你？');
             }
         });
     });

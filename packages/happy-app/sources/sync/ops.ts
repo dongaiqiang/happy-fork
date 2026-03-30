@@ -649,6 +649,48 @@ export async function sessionHandoffToMac(options: {
     }
 }
 
+export async function sessionSwitchController(options: {
+    sessionId: string;
+    targetController: 'mobile' | 'mac';
+    expectedLeaseVersion: number;
+}): Promise<{ success: boolean; state?: SessionControlState; message?: string; error?: string; noOp?: boolean }> {
+    try {
+        const response = await apiSocket.request(`/v3/sessions/${options.sessionId}/controller-switch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                targetController: options.targetController,
+                expectedLeaseVersion: options.expectedLeaseVersion
+            })
+        });
+        const payload = await response.json() as {
+            success: boolean;
+            error?: string;
+            message?: string;
+            noOp?: boolean;
+            state?: SessionControlState;
+        };
+        if (!response.ok || !payload.success) {
+            return {
+                success: false,
+                error: payload.error,
+                state: payload.state,
+                message: payload.message || payload.error || `controller switch failed (${response.status})`
+            };
+        }
+        return {
+            success: true,
+            state: payload.state,
+            noOp: payload.noOp
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+}
+
 // Export types for external use
 export type {
     SessionBashRequest,

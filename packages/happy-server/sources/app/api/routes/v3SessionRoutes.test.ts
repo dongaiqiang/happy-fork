@@ -2,11 +2,17 @@ import fastify from "fastify";
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from "fastify-type-provider-zod";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type Fastify } from "../types";
+import { createCipheriv, randomBytes } from "node:crypto";
 
 type SessionRecord = {
     id: string;
     accountId: string;
     seq: number;
+    controller: 'mobile' | 'mac';
+    controllerLeaseVersion: number;
+    handoffState: 'idle' | 'switching' | 'failed';
+    handoffReason: string | null;
+    controllerUpdatedAt: Date;
 };
 
 type MessageRecord = {
@@ -19,39 +25,60 @@ type MessageRecord = {
     updatedAt: Date;
 };
 
+type MachineRecord = {
+    id: string;
+    accountId: string;
+    dataEncryptionKey: Uint8Array | null;
+    active: boolean;
+};
+
 const {
     state,
     emitUpdateMock,
     dbMock,
     resetState,
     seedSession,
+    seedMachine,
     seedMessage
 } = vi.hoisted(() => {
     const state = {
         sessions: [] as SessionRecord[],
         messages: [] as MessageRecord[],
+        machines: [] as MachineRecord[],
         accountSeqById: new Map<string, number>(),
         nextMessageId: 1,
-        nowMs: 1700000000000
+        nowMs: 1700000000000,
+        connections: new Set<any>()
     };
 
     const resetState = () => {
         state.sessions = [];
         state.messages = [];
+        state.machines = [];
         state.accountSeqById = new Map<string, number>();
         state.nextMessageId = 1;
         state.nowMs = 1700000000000;
+        state.connections = new Set<any>();
     };
 
     const seedSession = (input: Partial<SessionRecord> & Pick<SessionRecord, "id" | "accountId">) => {
         state.sessions.push({
             id: input.id,
             accountId: input.accountId,
-            seq: input.seq ?? 0
+            seq: input.seq ?? 0,
+            controller: input.controller ?? 'mobile',
+            controllerLeaseVersion: input.controllerLeaseVersion ?? 0,
+            handoffState: input.handoffState ?? 'idle',
+            handoffReason: input.handoffReason ?? null,
+            controllerUpdatedAt: input.controllerUpdatedAt ?? new Date(state.nowMs)
         });
         if (!state.accountSeqById.has(input.accountId)) {
             state.accountSeqById.set(input.accountId, 0);
         }
+    };
+
+    const seedMachine = (input: MachineRecord) => {
+        state.machines.push(input);
     };
 
     const seedMessage = (input: {
@@ -109,6 +136,40 @@ const {
         return selectFields(session as unknown as Record<string, unknown>, args?.select);
     });
 
+    const sessionUpdateMany = vi.fn(async (args: any) => {
+        const where = args?.where ?? {};
+        const data = args?.data ?? {};
+        let count = 0;
+
+        for (const session of state.sessions) {
+            if (where.id && session.id !== where.id) continue;
+            if (where.accountId && session.accountId !== where.accountId) continue;
+            if (typeof where.controllerLeaseVersion === 'number' && session.controllerLeaseVersion !== where.controllerLeaseVersion) continue;
+            if (typeof where.controller === 'string' && session.controller !== where.controller) continue;
+            if (typeof where.handoffState === 'string' && session.handoffState !== where.handoffState) continue;
+            if (where.handoffState?.not && session.handoffState === where.handoffState.not) continue;
+
+            if (data.controller !== undefined) {
+                session.controller = data.controller;
+            }
+            if (data.controllerLeaseVersion !== undefined) {
+                session.controllerLeaseVersion = data.controllerLeaseVersion;
+            }
+            if (data.handoffState !== undefined) {
+                session.handoffState = data.handoffState;
+            }
+            if (data.handoffReason !== undefined) {
+                session.handoffReason = data.handoffReason;
+            }
+            if (data.controllerUpdatedAt !== undefined) {
+                session.controllerUpdatedAt = data.controllerUpdatedAt;
+            }
+            count += 1;
+        }
+
+        return { count };
+    });
+
     const accountUpdate = vi.fn(async (args: any) => {
         const accountId = args?.where?.id as string;
         const current = state.accountSeqById.get(accountId) ?? 0;
@@ -161,6 +222,17 @@ const {
         return selectFields(row as unknown as Record<string, unknown>, args?.select);
     });
 
+    const machineFindFirst = vi.fn(async (args: any) => {
+        const row = state.machines.find((machine) => (
+            machine.id === args?.where?.id &&
+            machine.accountId === args?.where?.accountId
+        ));
+        if (!row) {
+            return null;
+        }
+        return selectFields(row as unknown as Record<string, unknown>, args?.select);
+    });
+
     const txClient = {
         session: {
             update: sessionUpdate
@@ -177,10 +249,14 @@ const {
     const dbMock = {
         session: {
             findFirst: sessionFindFirst,
-            update: sessionUpdate
+            update: sessionUpdate,
+            updateMany: sessionUpdateMany
         },
         account: {
             update: accountUpdate
+        },
+        machine: {
+            findFirst: machineFindFirst
         },
         sessionMessage: {
             findMany: sessionMessageFindMany,
@@ -197,6 +273,7 @@ const {
         dbMock,
         resetState,
         seedSession,
+        seedMachine,
         seedMessage
     };
 });
@@ -211,7 +288,8 @@ vi.mock("@/utils/randomKeyNaked", () => ({
 
 vi.mock("@/app/events/eventRouter", () => ({
     eventRouter: {
-        emitUpdate: emitUpdateMock
+        emitUpdate: emitUpdateMock,
+        getConnections: vi.fn(() => state.connections)
     },
     buildNewMessageUpdate: vi.fn((message: unknown, sessionId: string, updateSeq: number, updateId: string) => ({
         id: updateId,
@@ -220,6 +298,16 @@ vi.mock("@/app/events/eventRouter", () => ({
             t: "new-message",
             sid: sessionId,
             message
+        },
+        createdAt: Date.now()
+    })),
+    buildSessionControlUpdate: vi.fn((sessionId: string, updateSeq: number, updateId: string, controlState: Record<string, unknown>) => ({
+        id: updateId,
+        seq: updateSeq,
+        body: {
+            t: "update-session",
+            id: sessionId,
+            ...controlState
         },
         createdAt: Date.now()
     }))
@@ -244,6 +332,16 @@ async function createApp() {
     v3SessionRoutes(typed);
     await typed.ready();
     return typed;
+}
+
+function encryptRpcPayload(payload: unknown, key: Uint8Array): string {
+    const nonce = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', key, nonce);
+    const plaintext = Buffer.from(JSON.stringify(payload));
+    const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    const bundle = Buffer.concat([Buffer.from([0]), nonce, ciphertext, authTag]);
+    return bundle.toString('base64');
 }
 
 describe("v3SessionRoutes", () => {
@@ -479,5 +577,94 @@ describe("v3SessionRoutes", () => {
             }
         });
         expect(wrongOwner.statusCode).toBe(404);
+    });
+
+    it("keeps mobile as controller after successful Open in Mac handoff", async () => {
+        const machineKey = new Uint8Array(32).fill(7);
+        seedSession({
+            id: "session-1",
+            accountId: "user-1",
+            controller: "mobile",
+            controllerLeaseVersion: 3,
+            handoffState: "idle"
+        });
+        seedMachine({
+            id: "machine-1",
+            accountId: "user-1",
+            dataEncryptionKey: machineKey,
+            active: true
+        });
+
+        const emitWithAck = vi.fn(async () => {
+            return encryptRpcPayload({
+                type: "success",
+                sessionId: "session-1"
+            }, machineKey);
+        });
+        state.connections = new Set([{
+            connectionType: 'machine-scoped',
+            machineId: 'machine-1',
+            socket: {
+                connected: true,
+                timeout: () => ({
+                    emitWithAck
+                })
+            }
+        }]);
+
+        app = await createApp();
+        const response = await app.inject({
+            method: "POST",
+            url: "/v3/sessions/session-1/handoff/mac",
+            headers: { "x-user-id": "user-1" },
+            payload: {
+                expectedLeaseVersion: 3,
+                machineId: "machine-1",
+                directory: "/tmp/demo",
+                claudeSessionId: "claude-1",
+                openTerminal: true,
+                terminalCarrierMode: "direct"
+            }
+        });
+
+        expect(response.statusCode).toBe(200);
+        const body = response.json();
+        expect(body.success).toBe(true);
+        expect(body.state.controller).toBe("mobile");
+        expect(body.state.leaseVersion).toBe(3);
+        expect(body.state.handoffState).toBe("idle");
+
+        const session = state.sessions.find((item) => item.id === "session-1");
+        expect(session?.controller).toBe("mobile");
+        expect(session?.controllerLeaseVersion).toBe(3);
+        expect(session?.handoffState).toBe("idle");
+    });
+
+    it("switches controller through controller-switch endpoint", async () => {
+        seedSession({
+            id: "session-1",
+            accountId: "user-1",
+            controller: "mobile",
+            controllerLeaseVersion: 2,
+            handoffState: "idle"
+        });
+
+        app = await createApp();
+        const response = await app.inject({
+            method: "POST",
+            url: "/v3/sessions/session-1/controller-switch",
+            headers: { "x-user-id": "user-1" },
+            payload: {
+                expectedLeaseVersion: 2,
+                targetController: "mac"
+            }
+        });
+
+        expect(response.statusCode).toBe(200);
+        const body = response.json();
+        expect(body.success).toBe(true);
+        expect(body.state.controller).toBe("mac");
+        expect(body.state.leaseVersion).toBe(3);
+        expect(body.state.handoffState).toBe("idle");
     });
 });
