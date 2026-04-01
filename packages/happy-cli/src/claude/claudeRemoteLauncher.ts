@@ -1,6 +1,6 @@
 import { render } from "ink";
 import { Session } from "./session";
-import { MessageBuffer } from "@/ui/ink/messageBuffer";
+import { MessageBuffer, type BufferedMessage } from "@/ui/ink/messageBuffer";
 import { RemoteModeDisplay } from "@/ui/ink/RemoteModeDisplay";
 import React from "react";
 import { claudeRemote } from "./claudeRemote";
@@ -21,6 +21,224 @@ interface PermissionsField {
     result: 'approved' | 'denied';
     mode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
     allowedTools?: string[];
+}
+
+type RemoteBufferEntry = {
+    type: BufferedMessage['type'];
+    content: string;
+};
+
+function isRecord(value: unknown): value is Record<string, any> {
+    return typeof value === 'object' && value !== null;
+}
+
+function asText(value: unknown): string | null {
+    return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function formatJson(value: unknown, maxLength = 400): string | null {
+    if (value === undefined || value === null) {
+        return null;
+    }
+
+    try {
+        const formatted = JSON.stringify(value, null, 2);
+        if (!formatted) {
+            return null;
+        }
+        return formatted.length > maxLength
+            ? `${formatted.slice(0, maxLength)}...`
+            : formatted;
+    } catch {
+        return null;
+    }
+}
+
+function withHeading(heading: string, text: string): string {
+    return `${heading}\n${text}`;
+}
+
+function extractSessionEnvelope(body: unknown): Record<string, any> | null {
+    if (!isRecord(body) || body.role !== 'session' || !isRecord(body.content)) {
+        return null;
+    }
+
+    const content = body.content;
+    if (content.type === 'session' && isRecord(content.data)) {
+        return content.data;
+    }
+
+    if (typeof content.id === 'string' && typeof content.role === 'string' && content.ev !== undefined) {
+        return content;
+    }
+
+    return null;
+}
+
+function formatSessionEnvelopeEntry(envelope: Record<string, any>): RemoteBufferEntry[] {
+    if (!isRecord(envelope.ev)) {
+        return [];
+    }
+
+    const role = envelope.role === 'user' ? 'user' : 'agent';
+    const event = envelope.ev;
+
+    if (event.t === 'text') {
+        const text = asText(event.text);
+        if (!text) {
+            return [];
+        }
+        return [{
+            type: role === 'user' ? 'user' : 'assistant',
+            content: withHeading(role === 'user' ? 'You' : 'Claude', text)
+        }];
+    }
+
+    if (event.t === 'service' && role === 'agent') {
+        const text = asText(event.text);
+        return text ? [{ type: 'status', content: text }] : [];
+    }
+
+    if (event.t === 'tool-call-start' && role === 'agent') {
+        const parts = [asText(event.description), formatJson(event.args)].filter((part): part is string => !!part);
+        return [{
+            type: 'tool',
+            content: withHeading(`Tool · ${event.name || 'unknown'}`, parts.join('\n'))
+        }];
+    }
+
+    if (event.t === 'tool-call-end' && role === 'agent') {
+        return [{
+            type: 'result',
+            content: withHeading('Tool', `Finished ${event.name || event.call || 'call'}`)
+        }];
+    }
+
+    if (event.t === 'file' && role === 'agent') {
+        const details = [asText(event.description), formatJson({
+            name: event.name,
+            ref: event.ref,
+            size: event.size
+        })].filter((part): part is string => !!part);
+        return [{
+            type: 'tool',
+            content: withHeading('Attachment', details.join('\n'))
+        }];
+    }
+
+    return [];
+}
+
+function formatLegacyAgentEntry(body: Record<string, any>): RemoteBufferEntry[] {
+    if (!isRecord(body.content)) {
+        return [];
+    }
+
+    const content = body.content;
+    if (body.role === 'user' && content.type === 'text') {
+        const text = asText(content.text);
+        return text ? [{ type: 'user', content: withHeading('You', text) }] : [];
+    }
+
+    if (body.role !== 'agent') {
+        return [];
+    }
+
+    if (content.type === 'output' && isRecord(content.data)) {
+        const data = content.data;
+        if (data.type === 'assistant' && isRecord(data.message) && Array.isArray(data.message.content)) {
+            const entries: RemoteBufferEntry[] = [];
+            const textBlocks = data.message.content
+                .filter(isRecord)
+                .filter((block) => block.type === 'text' || block.type === 'thinking')
+                .map((block) => asText(block.text))
+                .filter((text): text is string => !!text);
+
+            if (textBlocks.length > 0) {
+                entries.push({
+                    type: 'assistant',
+                    content: withHeading('Claude', textBlocks.join('\n\n'))
+                });
+            }
+
+            for (const block of data.message.content.filter(isRecord)) {
+                if (block.type !== 'tool_use') {
+                    continue;
+                }
+                const parts = [asText(block.description), formatJson(block.input)].filter((part): part is string => !!part);
+                entries.push({
+                    type: 'tool',
+                    content: withHeading(`Tool · ${block.name || 'unknown'}`, parts.join('\n'))
+                });
+            }
+
+            return entries;
+        }
+
+        if (data.type === 'user' && isRecord(data.message)) {
+            if (typeof data.message.content === 'string') {
+                const text = asText(data.message.content);
+                return text ? [{ type: 'user', content: withHeading('You', text) }] : [];
+            }
+
+            if (Array.isArray(data.message.content)) {
+                const entries: RemoteBufferEntry[] = [];
+                for (const block of data.message.content.filter(isRecord)) {
+                    if (block.type !== 'tool_result') {
+                        continue;
+                    }
+                    const resultText = typeof block.content === 'string'
+                        ? block.content
+                        : formatJson(block.content);
+                    if (!resultText) {
+                        continue;
+                    }
+                    entries.push({
+                        type: 'result',
+                        content: withHeading('Tool Result', resultText)
+                    });
+                }
+                return entries;
+            }
+        }
+    }
+
+    if (content.type === 'acp' && isRecord(content.data)) {
+        const provider = asText(content.provider) || 'Agent';
+        const data = content.data;
+        if (data.type === 'message') {
+            const text = asText(data.message);
+            return text ? [{ type: 'assistant', content: withHeading(provider, text) }] : [];
+        }
+        if (data.type === 'thinking') {
+            const text = asText(data.text);
+            return text ? [{ type: 'assistant', content: withHeading(`${provider} thinking`, text) }] : [];
+        }
+        if (data.type === 'reasoning') {
+            const text = asText(data.message);
+            return text ? [{ type: 'assistant', content: withHeading(`${provider} reasoning`, text) }] : [];
+        }
+    }
+
+    return [];
+}
+
+export function formatRemoteHistoryEntries(messages: Array<{ body: unknown }>): RemoteBufferEntry[] {
+    const entries: RemoteBufferEntry[] = [];
+
+    for (const message of messages) {
+        const envelope = extractSessionEnvelope(message.body);
+        if (envelope) {
+            entries.push(...formatSessionEnvelopeEntry(envelope));
+            continue;
+        }
+
+        if (isRecord(message.body)) {
+            entries.push(...formatLegacyAgentEntry(message.body));
+        }
+    }
+
+    return entries;
 }
 
 export async function claudeRemoteLauncher(session: Session): Promise<'switch' | 'exit'> {
@@ -102,6 +320,7 @@ export async function claudeRemoteLauncher(session: Session): Promise<'switch' |
             exitReason = 'switch';
         }
         await abort();
+        return true;
     }
 
     // When to abort
@@ -315,13 +534,18 @@ export async function claudeRemoteLauncher(session: Session): Promise<'switch' |
         // actually changes (e.g., new session started or /clear command used).
         // See: https://github.com/anthropics/happy-cli/issues/143
         let previousSessionId: string | null = null;
+        let hasLaunchedRemoteSession = false;
+        let loadedHistorySessionId: string | null = null;
         while (!exitReason) {
             logger.debug('[remote]: launch');
             messageBuffer.addMessage('═'.repeat(40), 'status');
 
-            // Only reset parent chain and show "new session" message when session ID actually changes
+            const isResumingExistingSession = !hasLaunchedRemoteSession && session.sessionId !== null;
             const isNewSession = session.sessionId !== previousSessionId;
-            if (isNewSession) {
+            if (isResumingExistingSession) {
+                messageBuffer.addMessage('Resuming Claude session...', 'status');
+                logger.debug(`[remote]: Resuming existing session on first launch: ${session.sessionId}`);
+            } else if (isNewSession) {
                 messageBuffer.addMessage('Starting new Claude session...', 'status');
                 permissionHandler.reset(); // Reset permissions before starting new session
                 sdkToLogConverter.resetParentChain(); // Reset parent chain for new conversation
@@ -331,7 +555,21 @@ export async function claudeRemoteLauncher(session: Session): Promise<'switch' |
                 logger.debug(`[remote]: Continuing existing session: ${session.sessionId}`);
             }
 
+            if (isResumingExistingSession && session.sessionId && loadedHistorySessionId !== session.sessionId) {
+                const historyMessages = await session.client.getRecentMessages(18);
+                const historyEntries = formatRemoteHistoryEntries(historyMessages);
+                if (historyEntries.length > 0) {
+                    messageBuffer.addMessage('Recent session history', 'status');
+                    for (const entry of historyEntries) {
+                        messageBuffer.addMessage(entry.content, entry.type);
+                    }
+                    messageBuffer.addMessage('─'.repeat(40), 'status');
+                }
+                loadedHistorySessionId = session.sessionId;
+            }
+
             previousSessionId = session.sessionId;
+            hasLaunchedRemoteSession = true;
             const controller = new AbortController();
             abortController = controller;
             abortFuture = new Future<void>();

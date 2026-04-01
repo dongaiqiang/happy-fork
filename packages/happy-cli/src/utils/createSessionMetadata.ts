@@ -8,6 +8,7 @@
  */
 
 import os from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 import type { AgentState, Metadata } from '@/api/types';
@@ -45,6 +46,38 @@ export interface SessionMetadataResult {
     state: AgentState;
     /** Session metadata */
     metadata: Metadata;
+}
+
+export function resolveTerminalCarrierMetadata(): Pick<Metadata, 'terminalCarrier' | 'tmuxSessionId'> {
+    let tmuxSessionId = process.env.HAPPY_TMUX_SESSION_ID?.trim();
+    if (!tmuxSessionId && process.env.TMUX) {
+        try {
+            tmuxSessionId = execFileSync('tmux', ['display-message', '-p', '#S:#W'], {
+                encoding: 'utf8'
+            }).trim();
+        } catch {
+            tmuxSessionId = undefined;
+        }
+    }
+    if (tmuxSessionId) {
+        return {
+            terminalCarrier: 'tmux',
+            tmuxSessionId
+        };
+    }
+
+    const terminalCarrier = process.env.HAPPY_TERMINAL_CARRIER?.trim();
+    if (terminalCarrier === 'tmux' || terminalCarrier === 'fallback' || terminalCarrier === 'unknown') {
+        return {
+            terminalCarrier,
+            tmuxSessionId: null
+        };
+    }
+
+    return {
+        terminalCarrier: 'unknown',
+        tmuxSessionId: null
+    };
 }
 
 /**
@@ -90,6 +123,7 @@ export function createSessionMetadata(opts: CreateSessionMetadataOptions): Sessi
         flavor: opts.flavor,
         sandbox: opts.sandbox?.enabled ? opts.sandbox : null,
         dangerouslySkipPermissions: opts.dangerouslySkipPermissions ?? null,
+        ...resolveTerminalCarrierMetadata(),
     };
 
     return { state, metadata };

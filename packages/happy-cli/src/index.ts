@@ -571,6 +571,10 @@ ${chalk.bold('To clean up runaway processes:')} Use ${chalk.cyan('happy doctor c
         options.startedBy = args[++i] as 'daemon' | 'terminal'
       } else if (arg === '--happy-session-id') {
         options.happySessionId = args[++i]
+      } else if (arg === '--terminal-carrier') {
+        options.terminalCarrier = z.enum(['tmux', 'fallback', 'unknown']).parse(args[++i])
+      } else if (arg === '--tmux-session-id') {
+        options.tmuxSessionId = args[++i]
       } else if (arg === '--js-runtime') {
         const runtime = args[++i]
         if (runtime !== 'node' && runtime !== 'bun') {

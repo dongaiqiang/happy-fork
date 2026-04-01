@@ -169,6 +169,39 @@ export type ReducerState = {
     };
 };
 
+function isEchoOfRecentLocalUserMessage(state: ReducerState, msg: NormalizedMessage): boolean {
+    if (msg.role !== 'user' || msg.localId) {
+        return false;
+    }
+
+    const incomingText = msg.content.text?.trim();
+    if (!incomingText) {
+        return false;
+    }
+
+    for (const existingMessage of state.messages.values()) {
+        if (existingMessage.role !== 'user') {
+            continue;
+        }
+
+        if (!existingMessage.realID) {
+            continue;
+        }
+
+        if (!existingMessage.text || existingMessage.text.trim() !== incomingText) {
+            continue;
+        }
+
+        if (Math.abs(existingMessage.createdAt - msg.createdAt) > 15000) {
+            continue;
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 export function createReducer(): ReducerState {
     return {
         toolIdToMessageId: new Map(),
@@ -597,6 +630,10 @@ export function reducer(state: ReducerState, messages: NormalizedMessage[], agen
             }
             // Check if we've seen this message ID before
             if (state.messageIds.has(msg.id)) {
+                continue;
+            }
+            if (isEchoOfRecentLocalUserMessage(state, msg)) {
+                state.messageIds.set(msg.id, msg.id);
                 continue;
             }
 

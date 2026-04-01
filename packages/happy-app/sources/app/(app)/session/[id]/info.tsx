@@ -248,16 +248,16 @@ function SessionInfoContent({ session }: { session: Session }) {
         );
     }, [performDelete]);
 
-    const resumeSession = useCallback(async (approvedNewDirectoryCreation: boolean = false) => {
+    const getCandidateMachineIds = useCallback(async () => {
         const machineId = session.metadata?.machineId;
         const directory = session.metadata?.path;
-        const claudeSessionId = session.metadata?.claudeSessionId;
         const sessionHost = session.metadata?.host;
         const sessionHomeDir = session.metadata?.homeDir;
-        if (!machineId || !directory || !claudeSessionId) {
-            Modal.alert(t('common.error'), 'This session cannot be resumed because required metadata is missing.');
-            return;
+
+        if (!machineId || !directory) {
+            return [];
         }
+
         await sync.refreshMachines();
         const latestMachines = Object.values(storage.getState().machines);
         const visibleMachines = latestMachines.length > 0 ? latestMachines : allMachines;
@@ -274,7 +274,8 @@ function SessionInfoContent({ session }: { session: Session }) {
         const pathMatchedMachines = onlineMachinesWithEncryption.filter((candidate) => (
             !!candidate.metadata?.homeDir && directory.startsWith(candidate.metadata.homeDir)
         ));
-        const candidateMachineIds = Array.from(new Set([
+
+        return Array.from(new Set([
             ...exactMachineMatch.map((candidate) => candidate.id),
             ...hostMatchedMachines.map((candidate) => candidate.id),
             ...homeDirMatchedMachines.map((candidate) => candidate.id),
@@ -282,6 +283,17 @@ function SessionInfoContent({ session }: { session: Session }) {
             ...onlineMachinesWithEncryption.map((candidate) => candidate.id),
             sync.encryption.getMachineEncryption(machineId) ? machineId : null
         ].filter((value): value is string => !!value)));
+    }, [allMachines, session.metadata?.homeDir, session.metadata?.host, session.metadata?.machineId, session.metadata?.path]);
+
+    const resumeSession = useCallback(async (approvedNewDirectoryCreation: boolean = false) => {
+        const machineId = session.metadata?.machineId;
+        const directory = session.metadata?.path;
+        const claudeSessionId = session.metadata?.claudeSessionId;
+        if (!machineId || !directory || !claudeSessionId) {
+            Modal.alert(t('common.error'), 'This session cannot be resumed because required metadata is missing.');
+            return;
+        }
+        const candidateMachineIds = await getCandidateMachineIds();
 
         if (candidateMachineIds.length === 0) {
             Modal.alert(t('common.error'), `当前没有可用于恢复的在线机器。这个历史会话绑定的机器 ID 是 ${machineId}，但 App 没有拿到它对应的加密信息。通常是旧机器记录已经失效，需要刷新机器列表或重新登录后再试。`);
@@ -325,7 +337,7 @@ function SessionInfoContent({ session }: { session: Session }) {
             return;
         }
         Modal.alert(t('common.error'), lastErrorMessage || 'Machine is offline. Start daemon on this machine and try again.');
-    }, [allMachines, machine, router, session.metadata?.claudeSessionId, session.metadata?.host, session.metadata?.machineId, session.metadata?.path]);
+    }, [getCandidateMachineIds, machine, router, session.metadata?.claudeSessionId, session.metadata?.machineId, session.metadata?.path]);
 
     const isResumeCapableSession = (!!session.metadata?.machineId)
         && (!!session.metadata?.path)
@@ -336,9 +348,24 @@ function SessionInfoContent({ session }: { session: Session }) {
         && !session.active
         && isResumeCapableSession;
     const canOpenInMac = isResumeCapableSession;
+    const hasTmuxOpenInMacSupport = session.metadata?.terminalCarrier === 'tmux' && !!session.metadata?.tmuxSessionId;
+    const openInMacResumeCommand = session.metadata?.claudeSessionId
+        ? `claude resume ${session.metadata.claudeSessionId}`
+        : 'claude resume <claude-session-id>';
+    const openInMacDebugDetails = [
+        `machineId: ${session.metadata?.machineId || '(missing)'}`,
+        `claudeSessionId: ${session.metadata?.claudeSessionId || '(missing)'}`,
+        `terminalCarrier: ${session.metadata?.terminalCarrier || '(missing)'}`,
+        `tmuxSessionId: ${session.metadata?.tmuxSessionId || '(missing)'}`,
+        `path: ${session.metadata?.path || '(missing)'}`,
+        `active: ${session.active ? 'true' : 'false'}`,
+        `connected: ${sessionStatus.isConnected ? 'true' : 'false'}`,
+        `controller: ${effectiveControlState?.controller || '(unknown)'}`,
+        `handoffState: ${effectiveControlState?.handoffState || '(unknown)'}`
+    ].join('\n');
     const isSwitchingControl = effectiveControlState?.handoffState === 'switching';
     const isMacController = effectiveControlState?.controller === 'mac' && effectiveControlState?.handoffState === 'idle';
-    const canSwitchControlToMac = canOpenInMac && !isSwitchingControl && !isMacController;
+    const canSwitchControlToMac = canOpenInMac && hasTmuxOpenInMacSupport && !isSwitchingControl && !isMacController;
     const canSwitchControlToMobile = !isSwitchingControl && isMacController;
 
     const [handingOffToMac, performHandoffToMac] = useHappyAction(async () => {
@@ -355,37 +382,57 @@ function SessionInfoContent({ session }: { session: Session }) {
         if (!machineId || !directory || !claudeSessionId) {
             throw new HappyError('This session cannot be handed off because required metadata is missing.', false);
         }
-        const expectedLeaseVersion = effectiveControlState?.leaseVersion ?? 0;
-        const result = await sessionHandoffToMac({
-            sessionId: session.id,
-            machineId,
-            directory,
-            claudeSessionId,
-            expectedLeaseVersion,
-            openTerminal: true,
-            terminalCarrierMode: 'direct'
-        });
-        if (!result.success) {
+        const candidateMachineIds = await getCandidateMachineIds();
+        if (candidateMachineIds.length === 0) {
+            throw new HappyError(`当前没有可用于 Open in Mac 的在线机器。这个历史会话绑定的机器 ID 是 ${machineId}，但 App 没有拿到它对应的加密信息。通常是旧机器记录已经失效，需要刷新机器列表或重新登录后再试。`, false);
+        }
+
+        let result: Awaited<ReturnType<typeof sessionHandoffToMac>> | null = null;
+        let attemptedMachineId = machineId;
+        for (const candidateMachineId of candidateMachineIds) {
+            attemptedMachineId = candidateMachineId;
+            result = await sessionHandoffToMac({
+                sessionId: session.id,
+                machineId: candidateMachineId,
+                directory,
+                claudeSessionId,
+                tmuxSessionId: session.metadata?.tmuxSessionId ?? undefined,
+                expectedLeaseVersion: effectiveControlState?.leaseVersion ?? 0,
+                openTerminal: true,
+                terminalCarrierMode: 'hosted'
+            });
             const reason = result.message || result.error || 'handoff-failed';
+            if (result.success || (!reason.includes('machine-offline-or-missing-key') && !reason.includes('machine-rpc-unavailable'))) {
+                break;
+            }
+        }
+
+        if (!result || !result.success) {
+            const reason = result?.message || result?.error || 'handoff-failed';
             const shouldUseDirectRpcFallback = reason.includes('machine-rpc-unavailable')
+                || reason.includes('machine-offline-or-missing-key')
                 || reason.includes('Invalid key length');
             if (shouldUseDirectRpcFallback) {
                 let spawnResult = await machineSpawnNewSession({
-                    machineId,
+                    machineId: attemptedMachineId,
                     directory,
                     sessionId: claudeSessionId,
+                    happySessionId: session.id,
+                    tmuxSessionId: session.metadata?.tmuxSessionId ?? undefined,
                     openTerminal: true,
-                    terminalCarrierMode: 'direct',
+                    terminalCarrierMode: 'hosted',
                     approvedNewDirectoryCreation: false,
                     agent: 'claude'
                 });
                 if (spawnResult.type === 'requestToApproveDirectoryCreation') {
                     spawnResult = await machineSpawnNewSession({
-                        machineId,
+                        machineId: attemptedMachineId,
                         directory,
                         sessionId: claudeSessionId,
+                        happySessionId: session.id,
+                        tmuxSessionId: session.metadata?.tmuxSessionId ?? undefined,
                         openTerminal: true,
-                        terminalCarrierMode: 'direct',
+                        terminalCarrierMode: 'hosted',
                         approvedNewDirectoryCreation: true,
                         agent: 'claude'
                     });
@@ -400,9 +447,18 @@ function SessionInfoContent({ session }: { session: Session }) {
                     );
                 }
                 await syncToResumedSession(spawnResult.sessionId);
+                const switchedController = await sessionSwitchController({
+                    sessionId: spawnResult.sessionId ?? session.id,
+                    targetController: 'mac',
+                    expectedLeaseVersion: effectiveControlState?.leaseVersion ?? 0
+                });
+                if (!switchedController.success) {
+                    throw new HappyError(switchedController.message || switchedController.error || 'controller-switch-failed', false);
+                }
+                await refreshControlState();
                 Modal.alert(t('common.success'), spawnResult.sessionId && spawnResult.sessionId !== session.id
-                    ? '已在 Mac 打开 Claude 会话，并切换到新的同步会话'
-                    : '已在 Mac 打开 Claude 会话，当前仍由手机端控制');
+                    ? '已在 Mac 打开 Claude 会话，并切换到新的同步会话；当前默认由 Mac 控制'
+                    : '已在 Mac 打开 Claude 会话；当前默认由 Mac 控制，手机端只读');
                 return;
             }
             const reasonHint = reason.includes('claude-session-not-found')
@@ -415,8 +471,8 @@ function SessionInfoContent({ session }: { session: Session }) {
         }
         await syncToResumedSession(result.resumedHappySessionId);
         Modal.alert(t('common.success'), result.resumedHappySessionId && result.resumedHappySessionId !== session.id
-            ? '已在 Mac 打开 Claude 会话，并切换到新的同步会话'
-            : '已在 Mac 打开 Claude 会话，当前仍由手机端控制');
+            ? '已在 Mac 打开 Claude 会话，并切换到新的同步会话；当前默认由 Mac 控制'
+            : '已在 Mac 打开 Claude 会话；当前默认由 Mac 控制，手机端只读');
     });
 
     const switchController = useCallback(async (targetController: 'mobile' | 'mac') => {
@@ -471,7 +527,9 @@ function SessionInfoContent({ session }: { session: Session }) {
         }
         Modal.alert(
             'Open in Mac',
-            'Open this session on Mac in view mode? Mobile stays controller until you explicitly switch.',
+            hasTmuxOpenInMacSupport
+                ? 'Open this session on Mac? After opening, Mac becomes the default controller and mobile turns read-only until you switch back.'
+                : `This session is not tmux-hosted yet. Happy will try to create a tmux-hosted Claude terminal on your Mac first.\n\nDebug info:\n${openInMacDebugDetails}`,
             [
                 { text: t('common.cancel'), style: 'cancel' },
                 {
@@ -480,7 +538,7 @@ function SessionInfoContent({ session }: { session: Session }) {
                 }
             ]
         );
-    }, [handingOffToMac, performHandoffToMac]);
+    }, [effectiveControlState?.controller, effectiveControlState?.handoffState, handingOffToMac, hasTmuxOpenInMacSupport, openInMacDebugDetails, openInMacResumeCommand, performHandoffToMac, session.active, session.metadata?.claudeSessionId, session.metadata?.machineId, session.metadata?.path, session.metadata?.terminalCarrier, session.metadata?.tmuxSessionId, sessionStatus.isConnected]);
 
     const resumableReasonText = (() => {
         if (sessionStatus.isConnected) return t('sessionInfo.resumableReasonSessionOnline');
@@ -647,7 +705,12 @@ function SessionInfoContent({ session }: { session: Session }) {
                     {canOpenInMac && (
                         <Item
                             title="Open in Mac"
-                            subtitle={handingOffToMac ? 'Opening session on Mac...' : 'Open the same session on Mac while mobile stays controller'}
+                            subtitle={handingOffToMac
+                                ? 'Opening session on Mac...'
+                                : hasTmuxOpenInMacSupport
+                                    ? 'Open the same session on Mac while mobile stays controller'
+                                    : 'Try to create a tmux-hosted Claude terminal on your Mac for this session'
+                            }
                             icon={<Ionicons name="desktop-outline" size={29} color="#5856D6" />}
                             onPress={handleOpenInMac}
                         />

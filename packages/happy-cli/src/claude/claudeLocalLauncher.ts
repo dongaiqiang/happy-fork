@@ -73,6 +73,7 @@ export async function claudeLocalLauncher(session: Session): Promise<LauncherRes
 
             // Abort
             await abort();
+            return true;
         }
 
         async function doStopSessionInner() {
@@ -145,6 +146,9 @@ export async function claudeLocalLauncher(session: Session): Promise<LauncherRes
                 }
             } catch (e) {
                 logger.debug('[local]: launch error', e);
+                if (exitReason) {
+                    break;
+                }
                 // If Claude exited with non-zero exit code, propagate it
                 if (e instanceof ExitCodeError) {
                     session.client.closeClaudeSessionTurn('failed');

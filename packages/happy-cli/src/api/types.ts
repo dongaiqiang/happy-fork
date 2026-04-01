@@ -257,6 +257,8 @@ export type Metadata = {
   },
   machineId?: string,
   claudeSessionId?: string, // Claude Code session ID
+  terminalCarrier?: 'tmux' | 'fallback' | 'unknown',
+  tmuxSessionId?: string | null,
   tools?: string[],
   slashCommands?: string[],
   homeDir: string,

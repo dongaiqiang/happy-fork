@@ -65,6 +65,64 @@ async function getProfileEnvironmentVariablesForAgent(
   }
 }
 
+function shellSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+export function buildTmuxHostedClaudeCommandArgs(entrypoint: string, options: {
+  happySessionId?: string;
+  resumeId?: string;
+  startingMode?: 'local' | 'remote';
+  startedBy?: 'daemon' | 'terminal';
+}) {
+  return [
+    shellSingleQuote(process.execPath),
+    '--no-warnings',
+    '--no-deprecation',
+    shellSingleQuote(entrypoint),
+    'claude',
+    '--happy-starting-mode',
+    options.startingMode ?? 'local',
+    '--terminal-carrier',
+    'tmux',
+    '--started-by',
+    options.startedBy ?? 'daemon',
+    ...(options.happySessionId ? ['--happy-session-id', shellSingleQuote(options.happySessionId)] : []),
+    ...(options.resumeId ? ['--resume', shellSingleQuote(options.resumeId)] : [])
+  ];
+}
+
+export function buildOpenInMacClaudeCommandArgs(entrypoint: string, options: {
+  happySessionId?: string;
+  resumeId?: string;
+}) {
+  return [
+    shellSingleQuote(process.execPath),
+    '--no-warnings',
+    '--no-deprecation',
+    shellSingleQuote(entrypoint),
+    'claude',
+    '--happy-starting-mode',
+    'remote',
+    '--terminal-carrier',
+    'fallback',
+    '--started-by',
+    'terminal',
+    ...(options.happySessionId ? ['--happy-session-id', shellSingleQuote(options.happySessionId)] : []),
+    ...(options.resumeId ? ['--resume', shellSingleQuote(options.resumeId)] : [])
+  ];
+}
+
+export function resolveRequestedTerminalCarrierMode(options: {
+  openTerminal?: boolean;
+  terminalCarrierMode?: 'direct' | 'hosted';
+}) {
+  if (options.terminalCarrierMode === 'hosted') {
+    return 'hosted' as const;
+  }
+  return 'direct' as const;
+}
+
 export async function startDaemon(): Promise<void> {
   // We don't have cleanup function at the time of server construction
   // Control flow is:
@@ -265,7 +323,6 @@ export async function startDaemon(): Promise<void> {
       }
     };
 
-    const shellSingleQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
     const appleScriptDoubleQuote = (value: string): string => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const normalizeDirectoryForComparison = (value: string | undefined, homeDirectory?: string): string | undefined => {
       if (!value) {
@@ -337,7 +394,9 @@ export async function startDaemon(): Promise<void> {
         : (logger.logFilePath
           ? `tail -n 120 -f ${shellSingleQuote(logger.logFilePath)}`
           : `echo ${shellSingleQuote('No session log found')}`);
-      const mainViewCommand = tmuxAttachCommand || tailCommand;
+      const mainViewCommand = tmuxAttachCommand
+        ? `(${tmuxAttachCommand}) || (${tailCommand})`
+        : tailCommand;
       const tmuxSessionLabel = options?.tmuxSessionId ?? 'unknown';
       const command = [
         ...envLines,
@@ -373,22 +432,15 @@ export async function startDaemon(): Promise<void> {
         ...directLaunchEnv
       });
       const entrypoint = join(projectPath(), 'dist', 'index.mjs');
-      const commandArgs = [
-        shellSingleQuote(process.execPath),
-        '--no-warnings',
-        '--no-deprecation',
-        shellSingleQuote(entrypoint),
-        'claude',
-        '--started-by',
-        'terminal',
-        ...(happySessionId ? ['--happy-session-id', shellSingleQuote(happySessionId)] : []),
-        ...(resumeId ? ['--resume', shellSingleQuote(resumeId)] : [])
-      ];
+      const commandArgs = buildOpenInMacClaudeCommandArgs(entrypoint, {
+        happySessionId,
+        resumeId
+      });
       const command = [
         ...envLines,
         `cd ${shellSingleQuote(directory)}`,
         `clear`,
-        `echo ${shellSingleQuote(resumeId ? 'Open in Mac direct mode: launching Claude locally with --resume' : 'Open in Mac direct mode: launching Claude locally')}`,
+        `echo ${shellSingleQuote(resumeId ? 'Open in Mac direct mode: opening remote observe terminal with --resume' : 'Open in Mac direct mode: opening remote observe terminal')}`,
         commandArgs.join(' ')
       ].join(' && ');
       const script = `tell application "Terminal" to activate\ntell application "Terminal" to do script "${appleScriptDoubleQuote(command)}"`;
@@ -400,12 +452,13 @@ export async function startDaemon(): Promise<void> {
     const spawnSession = async (options: SpawnSessionOptions): Promise<SpawnSessionResult> => {
       logger.debugLargeJson('[DAEMON RUN] Spawning session', options);
 
-      const { directory, sessionId, happySessionId, machineId, openTerminal = false, approvedNewDirectoryCreation = true } = options;
+      const { directory, sessionId, happySessionId, tmuxSessionId, machineId, openTerminal = false, approvedNewDirectoryCreation = true } = options;
       const resumeSessionId = typeof sessionId === 'string' && sessionId.trim() ? sessionId.trim() : undefined;
       const selectedAgent = options.agent === 'gemini' ? 'gemini' : (options.agent === 'codex' ? 'codex' : 'claude');
-      const requestedTerminalCarrierMode = openTerminal
-        ? (options.terminalCarrierMode === 'hosted' ? 'hosted' : 'direct')
-        : 'hosted';
+      const requestedTerminalCarrierMode = resolveRequestedTerminalCarrierMode({
+        openTerminal,
+        terminalCarrierMode: options.terminalCarrierMode
+      });
       let directoryCreated = false;
 
       try {
@@ -552,6 +605,29 @@ export async function startDaemon(): Promise<void> {
           };
         }
 
+        if (openTerminal && requestedTerminalCarrierMode === 'hosted' && tmuxSessionId) {
+          if (selectedAgent !== 'claude') {
+            return {
+              type: 'error',
+              errorMessage: `Hosted Open in Mac mode currently supports only Claude sessions, received agent '${selectedAgent}'.`
+            };
+          }
+          if (!happySessionId) {
+            return {
+              type: 'error',
+              errorMessage: 'Hosted Open in Mac attach requires happySessionId.'
+            };
+          }
+          tryOpenTerminalForResumeView(directory, resumeSessionId ?? happySessionId, {
+            happySessionId,
+            tmuxSessionId
+          });
+          return {
+            type: 'success',
+            sessionId: happySessionId
+          };
+        }
+
         if (openTerminal && requestedTerminalCarrierMode === 'direct') {
           if (selectedAgent !== 'claude') {
             return {
@@ -620,15 +696,33 @@ export async function startDaemon(): Promise<void> {
 
         // Check if tmux is available and should be used
         const tmuxAvailable = await isTmuxAvailable();
-        let useTmux = tmuxAvailable;
+        let useTmux = tmuxAvailable && requestedTerminalCarrierMode === 'hosted';
 
         // Get tmux session name from environment variables (now set by profile system)
         // Empty string means "use current/most recent session" (tmux default behavior)
         let tmuxSessionName: string | undefined = extraEnv.TMUX_SESSION_NAME;
 
+        // If tmux is installed but no explicit session name is configured, default Claude sessions
+        // to tmux's current/most recent session so Open in Mac can work out of the box.
+        if (useTmux && tmuxSessionName === undefined && selectedAgent === 'claude') {
+          tmuxSessionName = '';
+        }
+
+        logger.debug(`[DAEMON RUN] tmux decision`, {
+          tmuxAvailable,
+          selectedAgent,
+          requestedTerminalCarrierMode,
+          openTerminal,
+          explicitTmuxSessionName: extraEnv.TMUX_SESSION_NAME ?? null,
+          resolvedTmuxSessionName: tmuxSessionName ?? null,
+          happySessionId: happySessionId ?? null,
+          resumeSessionId: resumeSessionId ?? null,
+          directory
+        });
+
         // If tmux is not available or session name is explicitly undefined, fall back to regular spawning
         // Note: Empty string is valid (means use current/most recent tmux session)
-        if (!tmuxAvailable || tmuxSessionName === undefined) {
+        if (!useTmux || tmuxSessionName === undefined) {
           useTmux = false;
           if (tmuxSessionName !== undefined) {
             logger.debug(`[DAEMON RUN] tmux session name specified but tmux not available, falling back to regular spawning`);
@@ -644,15 +738,25 @@ export async function startDaemon(): Promise<void> {
 
           // Construct command for the CLI
           const cliPath = join(projectPath(), 'dist', 'index.mjs');
+          const windowName = `happy-${Date.now()}-${selectedAgent}`;
           // Determine agent command - support claude, codex, and gemini
-          const fullCommand = `node --no-warnings --no-deprecation ${cliPath} ${selectedAgent} --happy-starting-mode remote --started-by daemon${happySessionId ? ` --happy-session-id ${happySessionId}` : ''}${resumeSessionId ? ` --resume ${resumeSessionId}` : ''}`;
+          const tmuxStartingMode = openTerminal && requestedTerminalCarrierMode === 'hosted' && selectedAgent === 'claude'
+            ? 'local'
+            : 'remote';
+          const fullCommand = selectedAgent === 'claude'
+            ? buildTmuxHostedClaudeCommandArgs(cliPath, {
+              happySessionId,
+              resumeId: resumeSessionId,
+              startingMode: tmuxStartingMode,
+              startedBy: 'daemon'
+            }).join(' ')
+            : `node --no-warnings --no-deprecation ${cliPath} ${selectedAgent} --happy-starting-mode ${tmuxStartingMode} --terminal-carrier tmux --started-by daemon${happySessionId ? ` --happy-session-id ${happySessionId}` : ''}${resumeSessionId ? ` --resume ${resumeSessionId}` : ''}`;
 
           // Spawn in tmux with environment variables
           // IMPORTANT: Pass complete environment (process.env + extraEnv) because:
           // 1. tmux sessions need daemon's expanded auth variables (e.g., ANTHROPIC_AUTH_TOKEN)
           // 2. Regular spawn uses env: { ...process.env, ...extraEnv }
           // 3. tmux needs explicit environment via -e flags to ensure all variables are available
-          const windowName = `happy-${Date.now()}-${selectedAgent}`;
           const tmuxEnv: Record<string, string> = {};
 
           // Add all daemon environment variables (filtering out undefined)
@@ -695,18 +799,34 @@ export async function startDaemon(): Promise<void> {
 
             // Add to tracking map so webhook can find it later
             pidToTrackedSession.set(tmuxResult.pid, trackedSession);
+            logger.debug(`[DAEMON RUN] tmux tracked session payload`, trackedSession);
 
             // Wait for webhook to populate session with happySessionId (exact same as regular flow)
             logger.debug(`[DAEMON RUN] Waiting for session webhook for PID ${tmuxResult.pid} (tmux)`);
 
             return new Promise((resolve) => {
               // Set timeout for webhook (same as regular flow)
-              const timeout = setTimeout(() => {
+              const timeout = setTimeout(async () => {
                 pidToAwaiter.delete(tmuxResult.pid!);
-                logger.debug(`[DAEMON RUN] Session webhook timeout for PID ${tmuxResult.pid} (tmux)`);
+                let tmuxPaneSnapshot = '';
+                if (tmuxResult.sessionId) {
+                  try {
+                    const parsed = parseTmuxSessionIdentifier(tmuxResult.sessionId);
+                    const tmuxForSnapshot = getTmuxUtilities(parsed.session);
+                    tmuxPaneSnapshot = await tmuxForSnapshot.captureCurrentInput(parsed.session, parsed.window, parsed.pane);
+                  } catch (error) {
+                    logger.debug('[DAEMON RUN] Failed to capture tmux pane snapshot on webhook timeout', error);
+                  }
+                }
+                logger.debug(`[DAEMON RUN] Session webhook timeout for PID ${tmuxResult.pid} (tmux)`, {
+                  tmuxSessionId: tmuxResult.sessionId ?? null,
+                  tmuxPaneSnapshot
+                });
                 resolve({
                   type: 'error',
-                  errorMessage: `Session webhook timeout for PID ${tmuxResult.pid} (tmux)`
+                  errorMessage: tmuxPaneSnapshot
+                    ? `Session webhook timeout for PID ${tmuxResult.pid} (tmux). Last tmux pane line: ${tmuxPaneSnapshot}`
+                    : `Session webhook timeout for PID ${tmuxResult.pid} (tmux)`
                 });
               }, 15_000); // Same timeout as regular sessions
 
@@ -714,6 +834,34 @@ export async function startDaemon(): Promise<void> {
               pidToAwaiter.set(tmuxResult.pid!, (completedSession) => {
                 clearTimeout(timeout);
                 logger.debug(`[DAEMON RUN] Session ${completedSession.happySessionId} fully spawned with webhook (tmux)`);
+                if (completedSession.happySessionId && completedSession.pid) {
+                  for (const [trackedPid, trackedSession] of pidToTrackedSession.entries()) {
+                    if (trackedPid === completedSession.pid) {
+                      continue;
+                    }
+                    if (trackedSession.happySessionId !== completedSession.happySessionId) {
+                      continue;
+                    }
+                    if (trackedSession.startedBy !== 'daemon') {
+                      continue;
+                    }
+                    try {
+                      if (trackedSession.childProcess) {
+                        trackedSession.childProcess.kill('SIGTERM');
+                      } else {
+                        process.kill(trackedPid, 'SIGTERM');
+                      }
+                      logger.debug('[DAEMON RUN] Retired conflicting tracked session after tmux handoff', {
+                        happySessionId: completedSession.happySessionId,
+                        retiredPid: trackedPid,
+                        retiredCarrier: trackedSession.happySessionMetadataFromLocalWebhook?.terminalCarrier ?? null
+                      });
+                    } catch (error) {
+                      logger.debug('[DAEMON RUN] Failed to retire conflicting tracked session after tmux handoff', error);
+                    }
+                    pidToTrackedSession.delete(trackedPid);
+                  }
+                }
                 if (openTerminal && resumeSessionId && selectedAgent === 'claude') {
                   try {
                     tryOpenTerminalForResumeView(directory, resumeSessionId, {
@@ -763,6 +911,7 @@ export async function startDaemon(): Promise<void> {
           const args = [
             agentCommand,
             '--happy-starting-mode', 'remote',
+            '--terminal-carrier', 'fallback',
             '--started-by', 'daemon'
           ];
           if (happySessionId) {

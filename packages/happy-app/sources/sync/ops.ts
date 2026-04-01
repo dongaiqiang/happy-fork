@@ -146,6 +146,8 @@ export interface SpawnSessionOptions {
     machineId: string;
     directory: string;
     sessionId?: string;
+    happySessionId?: string;
+    tmuxSessionId?: string;
     openTerminal?: boolean;
     terminalCarrierMode?: 'direct' | 'hosted';
     approvedNewDirectoryCreation?: boolean;
@@ -171,13 +173,15 @@ export interface SpawnSessionOptions {
  */
 export async function machineSpawnNewSession(options: SpawnSessionOptions): Promise<SpawnSessionResult> {
 
-    const { machineId, directory, sessionId, openTerminal = false, terminalCarrierMode, approvedNewDirectoryCreation = false, token, agent, environmentVariables } = options;
+    const { machineId, directory, sessionId, happySessionId, tmuxSessionId, openTerminal = false, terminalCarrierMode, approvedNewDirectoryCreation = false, token, agent, environmentVariables } = options;
 
     try {
         const result = await apiSocket.machineRPC<SpawnSessionResult, {
             type: 'spawn-in-directory'
             directory: string
             sessionId?: string,
+            happySessionId?: string,
+            tmuxSessionId?: string,
             openTerminal?: boolean,
             terminalCarrierMode?: 'direct' | 'hosted',
             approvedNewDirectoryCreation?: boolean,
@@ -187,7 +191,7 @@ export async function machineSpawnNewSession(options: SpawnSessionOptions): Prom
         }>(
             machineId,
             'spawn-happy-session',
-            { type: 'spawn-in-directory', directory, sessionId, openTerminal, terminalCarrierMode, approvedNewDirectoryCreation, token, agent, environmentVariables }
+            { type: 'spawn-in-directory', directory, sessionId, happySessionId, tmuxSessionId, openTerminal, terminalCarrierMode, approvedNewDirectoryCreation, token, agent, environmentVariables }
         );
         return result;
     } catch (error) {
@@ -602,6 +606,7 @@ export async function sessionHandoffToMac(options: {
     machineId: string;
     directory: string;
     claudeSessionId: string;
+    tmuxSessionId?: string;
     expectedLeaseVersion: number;
     openTerminal?: boolean;
     terminalCarrierMode?: 'direct' | 'hosted';
@@ -616,6 +621,7 @@ export async function sessionHandoffToMac(options: {
                 machineId: options.machineId,
                 directory: options.directory,
                 claudeSessionId: options.claudeSessionId,
+                tmuxSessionId: options.tmuxSessionId,
                 openTerminal: options.openTerminal ?? true,
                 terminalCarrierMode: options.terminalCarrierMode ?? 'direct',
                 approvedNewDirectoryCreation: options.approvedNewDirectoryCreation ?? false

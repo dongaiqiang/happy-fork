@@ -122,6 +122,95 @@ describe('reducer', () => {
             expect(result2.messages).toHaveLength(0);
         });
 
+        it('should suppress echoed user messages when a recent mobile user message already exists', () => {
+            const state = createReducer();
+
+            reducer(state, [
+                {
+                    id: 'mobile-msg',
+                    localId: 'local-mobile',
+                    createdAt: 1000,
+                    role: 'user',
+                    content: { type: 'text', text: '创建目录 ttt' },
+                    isSidechain: false,
+                    meta: {
+                        sentFrom: 'ios'
+                    }
+                }
+            ]);
+
+            const result = reducer(state, [
+                {
+                    id: 'cli-echo-msg',
+                    localId: null,
+                    createdAt: 2000,
+                    role: 'user',
+                    content: { type: 'text', text: '创建目录 ttt' },
+                    isSidechain: false,
+                    meta: {
+                        sentFrom: 'cli'
+                    }
+                }
+            ]);
+
+            expect(result.messages).toHaveLength(0);
+        });
+
+        it('should suppress localId-null user echoes even when sentFrom is not cli', () => {
+            const state = createReducer();
+
+            reducer(state, [
+                {
+                    id: 'mobile-msg-2',
+                    localId: 'local-mobile-2',
+                    createdAt: 1000,
+                    role: 'user',
+                    content: { type: 'text', text: '删除 t00 目录' },
+                    isSidechain: false,
+                    meta: {
+                        sentFrom: 'ios'
+                    }
+                }
+            ]);
+
+            const result = reducer(state, [
+                {
+                    id: 'echo-msg-2',
+                    localId: null,
+                    createdAt: 2000,
+                    role: 'user',
+                    content: { type: 'text', text: '删除 t00 目录' },
+                    isSidechain: false,
+                    meta: {
+                        sentFrom: 'ios'
+                    }
+                }
+            ]);
+
+            expect(result.messages).toHaveLength(0);
+        });
+
+        it('should keep cli user messages when no matching mobile message exists', () => {
+            const state = createReducer();
+
+            const result = reducer(state, [
+                {
+                    id: 'cli-msg',
+                    localId: null,
+                    createdAt: 1000,
+                    role: 'user',
+                    content: { type: 'text', text: '来自 Mac 的输入' },
+                    isSidechain: false,
+                    meta: {
+                        sentFrom: 'cli'
+                    }
+                }
+            ]);
+
+            expect(result.messages).toHaveLength(1);
+            expect(result.messages[0]?.kind).toBe('user-text');
+        });
+
         it('should process multiple user messages with different localIds', () => {
             const state = createReducer();
             const messages: NormalizedMessage[] = [

@@ -120,6 +120,7 @@ export interface SpawnSessionOptions {
     directory: string;
     sessionId?: string;
     happySessionId?: string;
+    tmuxSessionId?: string;
     openTerminal?: boolean;
     terminalCarrierMode?: 'direct' | 'hosted';
     approvedNewDirectoryCreation?: boolean;

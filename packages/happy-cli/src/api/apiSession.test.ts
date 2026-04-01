@@ -378,6 +378,7 @@ describe('ApiSessionClient v3 messages API migration', () => {
                 sentFrom: 'cli'
             }
         });
+        expect(mockAxiosPost.mock.calls[0][2]?.headers?.['X-Happy-Message-Source']).toBe('cli');
     });
 
     it('sends only modern payload for user session envelopes', async () => {
@@ -706,6 +707,71 @@ describe('ApiSessionClient v3 messages API migration', () => {
         expect(onMessage).toHaveBeenCalledWith(agentMessage);
     });
 
+    it('returns trimmed decrypted history without changing sync cursor', async () => {
+        const client = new ApiSessionClient('fake-token', session);
+        const first = { role: 'user', content: { type: 'text', text: 'first' } };
+        const second = {
+            role: 'session',
+            content: {
+                id: 'env-2',
+                time: 2,
+                role: 'agent',
+                turn: 'turn-2',
+                ev: { t: 'text', text: 'second' }
+            },
+            meta: { sentFrom: 'cli' }
+        };
+        const third = { role: 'user', content: { type: 'text', text: 'third' } };
+
+        mockAxiosGet
+            .mockResolvedValueOnce({
+                data: {
+                    messages: [
+                        {
+                            id: 'msg-1',
+                            seq: 1,
+                            content: { t: 'encrypted', c: encryptContent(session, first) },
+                            localId: null,
+                            createdAt: 1000,
+                            updatedAt: 1000
+                        },
+                        {
+                            id: 'msg-2',
+                            seq: 2,
+                            content: { t: 'encrypted', c: encryptContent(session, second) },
+                            localId: null,
+                            createdAt: 2000,
+                            updatedAt: 2000
+                        }
+                    ],
+                    hasMore: true
+                }
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    messages: [
+                        {
+                            id: 'msg-3',
+                            seq: 3,
+                            content: { t: 'encrypted', c: encryptContent(session, third) },
+                            localId: null,
+                            createdAt: 3000,
+                            updatedAt: 3000
+                        }
+                    ],
+                    hasMore: false
+                }
+            });
+
+        const history = await client.getRecentMessages(2);
+
+        expect(history).toHaveLength(2);
+        expect(history.map((message) => message.seq)).toEqual([2, 3]);
+        expect(history[0]?.body).toEqual(second);
+        expect(history[1]?.body).toEqual(third);
+        expect((client as any).lastSeq).toBe(0);
+    });
+
     it('applies consecutive new-message updates directly (fast path)', () => {
         const client = new ApiSessionClient('fake-token', session);
         const onUserMessage = vi.fn();
@@ -766,6 +832,31 @@ describe('ApiSessionClient v3 messages API migration', () => {
             expect(mockAxiosGet).toHaveBeenCalledTimes(1);
         });
         expect(mockAxiosGet.mock.calls[0][1].params.after_seq).toBe(0);
+    });
+
+    it('starts receive sync from session seq when resuming an existing session', async () => {
+        const resumedSession = {
+            ...session,
+            seq: 153
+        };
+        const client = new ApiSessionClient('fake-token', resumedSession);
+
+        mockAxiosGet.mockResolvedValueOnce({
+            data: {
+                messages: [],
+                hasMore: false
+            }
+        });
+
+        emitSocketEvent('update', createNewMessageUpdate(154, encryptContent(resumedSession, {
+            role: 'user',
+            content: { type: 'text', text: 'next' }
+        })));
+
+        await waitForCheck(() => {
+            expect(mockAxiosGet).not.toHaveBeenCalled();
+        });
+        expect((client as any).lastSeq).toBe(154);
     });
 
     it('invalidates receive sync for duplicate and stale seq values', async () => {

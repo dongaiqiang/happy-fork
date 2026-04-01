@@ -2,7 +2,7 @@ import fastify from "fastify";
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from "fastify-type-provider-zod";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type Fastify } from "../types";
-import { createCipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 type SessionRecord = {
     id: string;
@@ -344,6 +344,17 @@ function encryptRpcPayload(payload: unknown, key: Uint8Array): string {
     return bundle.toString('base64');
 }
 
+function decryptRpcPayload(payload: string, key: Uint8Array): any {
+    const bundle = Buffer.from(payload, 'base64');
+    const nonce = bundle.subarray(1, 13);
+    const authTag = bundle.subarray(bundle.length - 16);
+    const ciphertext = bundle.subarray(13, bundle.length - 16);
+    const decipher = createDecipheriv('aes-256-gcm', key, nonce);
+    decipher.setAuthTag(authTag);
+    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    return JSON.parse(plaintext.toString('utf8'));
+}
+
 describe("v3SessionRoutes", () => {
     let app: Fastify;
 
@@ -425,6 +436,23 @@ describe("v3SessionRoutes", () => {
         expect(emptyResponse.statusCode).toBe(200);
         const body = emptyResponse.json();
         expect(body.messages).toEqual([]);
+        expect(body.hasMore).toBe(false);
+    });
+
+    it("allows readonly mobile clients to fetch messages while mac is the controller", async () => {
+        seedSession({ id: "session-1", accountId: "user-1", controller: "mac", handoffState: "idle" });
+        seedMessage({ sessionId: "session-1", seq: 1, localId: "l1", content: { t: "encrypted", c: "a" } });
+
+        app = await createApp();
+        const response = await app.inject({
+            method: "GET",
+            url: "/v3/sessions/session-1/messages",
+            headers: { "x-user-id": "user-1" }
+        });
+
+        expect(response.statusCode).toBe(200);
+        const body = response.json();
+        expect(body.messages.map((message: any) => message.seq)).toEqual([1]);
         expect(body.hasMore).toBe(false);
     });
 
@@ -579,7 +607,64 @@ describe("v3SessionRoutes", () => {
         expect(wrongOwner.statusCode).toBe(404);
     });
 
-    it("keeps mobile as controller after successful Open in Mac handoff", async () => {
+    it("rejects sending messages when mobile is not the controller", async () => {
+        seedSession({ id: "session-1", accountId: "user-1", controller: "mac", handoffState: "idle" });
+        app = await createApp();
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/v3/sessions/session-1/messages",
+            headers: { "x-user-id": "user-1" },
+            payload: {
+                messages: [{ localId: "l1", content: "enc-1" }]
+            }
+        });
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json()).toEqual({ error: "mobile-controller-required" });
+        expect(state.messages).toHaveLength(0);
+    });
+
+    it("allows cli-originated message uploads while mac is the controller", async () => {
+        seedSession({ id: "session-1", accountId: "user-1", controller: "mac", handoffState: "idle" });
+        app = await createApp();
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/v3/sessions/session-1/messages",
+            headers: {
+                "x-user-id": "user-1",
+                "x-happy-message-source": "cli"
+            },
+            payload: {
+                messages: [{ localId: "l1", content: "enc-1" }]
+            }
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(state.messages).toHaveLength(1);
+        expect(state.messages[0]?.sessionId).toBe("session-1");
+    });
+
+    it("rejects sending messages while handoff is switching", async () => {
+        seedSession({ id: "session-1", accountId: "user-1", controller: "mobile", handoffState: "switching" });
+        app = await createApp();
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/v3/sessions/session-1/messages",
+            headers: { "x-user-id": "user-1" },
+            payload: {
+                messages: [{ localId: "l1", content: "enc-1" }]
+            }
+        });
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json()).toEqual({ error: "switching-in-progress" });
+        expect(state.messages).toHaveLength(0);
+    });
+
+    it("switches controller to mac after successful Open in Mac handoff", async () => {
         const machineKey = new Uint8Array(32).fill(7);
         seedSession({
             id: "session-1",
@@ -622,22 +707,32 @@ describe("v3SessionRoutes", () => {
                 machineId: "machine-1",
                 directory: "/tmp/demo",
                 claudeSessionId: "claude-1",
+                tmuxSessionId: "happy:window-1",
                 openTerminal: true,
-                terminalCarrierMode: "direct"
+                terminalCarrierMode: "hosted"
             }
         });
 
         expect(response.statusCode).toBe(200);
         const body = response.json();
         expect(body.success).toBe(true);
-        expect(body.state.controller).toBe("mobile");
-        expect(body.state.leaseVersion).toBe(3);
+        expect(body.state.controller).toBe("mac");
+        expect(body.state.leaseVersion).toBe(4);
         expect(body.state.handoffState).toBe("idle");
 
         const session = state.sessions.find((item) => item.id === "session-1");
-        expect(session?.controller).toBe("mobile");
-        expect(session?.controllerLeaseVersion).toBe(3);
+        expect(session?.controller).toBe("mac");
+        expect(session?.controllerLeaseVersion).toBe(4);
         expect(session?.handoffState).toBe("idle");
+        const firstRpcCall = emitWithAck.mock.calls[0];
+        expect(firstRpcCall).toBeTruthy();
+        if (!firstRpcCall) {
+            throw new Error("Missing RPC call");
+        }
+        const [, rpcRequest] = firstRpcCall as unknown as [string, { params: string }];
+        const rpcPayload = decryptRpcPayload(rpcRequest.params, machineKey);
+        expect(rpcPayload.tmuxSessionId).toBe("happy:window-1");
+        expect(rpcPayload.terminalCarrierMode).toBe("hosted");
     });
 
     it("switches controller through controller-switch endpoint", async () => {

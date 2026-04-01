@@ -28,6 +28,8 @@ import { claudeLocal } from '@/claude/claudeLocal';
 import { createSessionScanner } from '@/claude/utils/sessionScanner';
 import { Session } from './session';
 import { applySandboxPermissionPolicy, resolveInitialClaudePermissionMode } from './utils/permissionMode';
+import { resolveTerminalCarrierMetadata } from '@/utils/createSessionMetadata';
+import { injectMessageIntoTmuxPane } from './utils/tmuxInjection';
 
 /** JavaScript runtime to use for spawning Claude Code */
 export type JsRuntime = 'node' | 'bun'
@@ -41,9 +43,75 @@ export interface StartOptions {
     claudeEnvVars?: Record<string, string>
     claudeArgs?: string[]
     startedBy?: 'daemon' | 'terminal'
+    terminalCarrier?: 'tmux' | 'fallback' | 'unknown'
+    tmuxSessionId?: string
     noSandbox?: boolean
     /** JavaScript runtime to use for spawning Claude Code (default: 'node') */
     jsRuntime?: JsRuntime
+}
+
+const TMUX_INJECTABLE_MESSAGE_SOURCES = new Set(['ios', 'android', 'mac', 'web']);
+
+export function isTmuxInjectableMobileTextMessage(message: {
+    content: { type?: string; text?: string };
+    meta?: {
+        sentFrom?: string;
+        customSystemPrompt?: string | null;
+        allowedTools?: string[] | null;
+        disallowedTools?: string[] | null;
+        displayText?: string;
+    };
+}): boolean {
+    if (message.content.type !== 'text') {
+        return false;
+    }
+    if (typeof message.content.text !== 'string' || message.content.text.length === 0) {
+        return false;
+    }
+
+    const sentFrom = message.meta?.sentFrom;
+    if (!sentFrom || !TMUX_INJECTABLE_MESSAGE_SOURCES.has(sentFrom)) {
+        return false;
+    }
+
+    if (message.meta?.customSystemPrompt != null) {
+        return false;
+    }
+    if (message.meta?.allowedTools != null) {
+        return false;
+    }
+    if (message.meta?.disallowedTools != null) {
+        return false;
+    }
+    if (message.meta?.displayText) {
+        return false;
+    }
+
+    return true;
+}
+
+export function clearPendingRequestsForTmuxHostedLocalStart(currentState: AgentState): AgentState {
+    const pendingRequests = currentState.requests ?? {};
+    const pendingEntries = Object.entries(pendingRequests);
+
+    if (pendingEntries.length === 0) {
+        return currentState;
+    }
+
+    const completedAt = Date.now();
+
+    return {
+        ...currentState,
+        requests: {},
+        completedRequests: {
+            ...(currentState.completedRequests ?? {}),
+            ...Object.fromEntries(pendingEntries.map(([requestId, request]) => [requestId, {
+                ...request,
+                completedAt,
+                status: 'canceled'
+            }]))
+        }
+    };
 }
 
 export async function runClaude(credentials: Credentials, options: StartOptions = {}): Promise<void> {
@@ -58,8 +126,11 @@ export async function runClaude(credentials: Credentials, options: StartOptions 
     logger.debug(`[START] Options: startedBy=${options.startedBy}, startingMode=${options.startingMode}`);
 
     // Validate daemon spawn requirements - fail fast on invalid config
-    if (options.startedBy === 'daemon' && options.startingMode === 'local') {
-        throw new Error('Daemon-spawned sessions cannot use local/interactive mode. Use --happy-starting-mode remote or spawn sessions directly from terminal.');
+    const isTmuxHostedLocalSession = options.startedBy === 'daemon'
+        && options.startingMode === 'local'
+        && options.terminalCarrier === 'tmux';
+    if (options.startedBy === 'daemon' && options.startingMode === 'local' && !isTmuxHostedLocalSession) {
+        throw new Error('Daemon-spawned sessions cannot use local/interactive mode unless they are tmux-hosted Claude sessions.');
     }
 
     // Set backend for offline warnings (before any API calls)
@@ -116,7 +187,14 @@ export async function runClaude(credentials: Credentials, options: StartOptions 
         flavor: 'claude',
         sandbox: sandboxConfig?.enabled ? sandboxConfig : null,
         dangerouslySkipPermissions,
+        ...resolveTerminalCarrierMetadata(),
     };
+    if (options.terminalCarrier) {
+        metadata.terminalCarrier = options.terminalCarrier;
+    }
+    if (options.tmuxSessionId) {
+        metadata.tmuxSessionId = options.tmuxSessionId;
+    }
     const response = options.happySessionId
         ? await api.getSessionById(options.happySessionId)
         : await api.getOrCreateSession({ tag: sessionTag, metadata, state });
@@ -181,12 +259,19 @@ export async function runClaude(credentials: Credentials, options: StartOptions 
         logger.debug('[START] Failed to report to daemon (may not be running):', error);
     }
 
-    // Extract SDK metadata in background and update session when ready
+    const session = api.sessionSyncClient(response);
+
+    if (options.happySessionId) {
+        session.updateMetadata((currentMetadata) => ({
+            ...currentMetadata,
+            ...metadata
+        }));
+    }
+
     extractSDKMetadataAsync(async (sdkMetadata) => {
         logger.debug('[start] SDK metadata extracted, updating session:', sdkMetadata);
         try {
-            // Update session metadata with tools and slash commands
-            api.sessionSyncClient(response).updateMetadata((currentMetadata) => ({
+            session.updateMetadata((currentMetadata) => ({
                 ...currentMetadata,
                 tools: sdkMetadata.tools,
                 slashCommands: sdkMetadata.slashCommands
@@ -196,16 +281,6 @@ export async function runClaude(credentials: Credentials, options: StartOptions 
             logger.debug('[start] Failed to update session metadata:', error);
         }
     });
-
-    // Create realtime session
-    const session = api.sessionSyncClient(response);
-
-    if (options.happySessionId) {
-        session.updateMetadata((currentMetadata) => ({
-            ...currentMetadata,
-            ...metadata
-        }));
-    }
 
     // Start Happy MCP server
     const happyServer = await startHappyServer(session);
@@ -243,7 +318,9 @@ export async function runClaude(credentials: Credentials, options: StartOptions 
 
     // Set initial agent state
     session.updateAgentState((currentState) => ({
-        ...currentState,
+        ...(isTmuxHostedLocalSession
+            ? clearPendingRequestsForTmuxHostedLocalStart(currentState)
+            : currentState),
         controlledByUser: options.startingMode !== 'remote'
     }));
 
@@ -274,6 +351,21 @@ export async function runClaude(credentials: Credentials, options: StartOptions 
     let currentAllowedTools: string[] | undefined = undefined; // Track current allowed tools
     let currentDisallowedTools: string[] | undefined = undefined; // Track current disallowed tools
     session.onUserMessage((message) => {
+        const isPlainMobileMessage = isTmuxInjectableMobileTextMessage(message);
+        const specialCommand = parseSpecialCommand(message.content.text);
+        const controllerAllowsMobileInjection = session.getCurrentAgentState()?.controlledByUser !== true;
+        if (isTmuxHostedLocalSession && currentSession?.mode === 'local' && controllerAllowsMobileInjection && isPlainMobileMessage && specialCommand.type === null) {
+            void injectMessageIntoTmuxPane(options.tmuxSessionId || metadata.tmuxSessionId || '', message.content.text).then((success) => {
+                if (!success) {
+                    logger.debug('[start] tmux injection failed, reporting delivery failure');
+                    session.sendSessionEvent({
+                        type: 'message',
+                        message: 'Failed to deliver mobile message into the tmux-hosted Claude terminal.'
+                    });
+                }
+            });
+            return;
+        }
 
         // Resolve permission mode from meta - pass through as-is, mapping happens at SDK boundary
         let messagePermissionMode: PermissionMode | undefined = currentPermissionMode;
@@ -346,8 +438,6 @@ export async function runClaude(credentials: Credentials, options: StartOptions 
         }
 
         // Check for special commands before processing
-        const specialCommand = parseSpecialCommand(message.content.text);
-
         if (specialCommand.type === 'compact') {
             logger.debug('[start] Detected /compact command');
             const enhancedMode: EnhancedMode = {

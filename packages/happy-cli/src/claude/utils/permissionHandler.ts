@@ -379,6 +379,10 @@ export class PermissionHandler {
         this.session.client.rpcHandlerManager.registerHandler<PermissionResponse, void>('permission', async (message) => {
             logger.debug(`Permission response: ${JSON.stringify(message)}`);
 
+            if (this.session.client.getCurrentAgentState()?.controlledByUser === true) {
+                throw new Error('mac-controller-required');
+            }
+
             const id = message.id;
             const pending = this.pendingRequests.get(id);
 

@@ -34,6 +34,8 @@ export const MetadataSchema = z.object({
     }).optional(),
     machineId: z.string().optional(),
     claudeSessionId: z.string().optional(), // Claude Code session ID
+    terminalCarrier: z.enum(['tmux', 'fallback', 'unknown']).optional(),
+    tmuxSessionId: z.string().nullish(),
     tools: z.array(z.string()).optional(),
     slashCommands: z.array(z.string()).optional(),
     homeDir: z.string().optional(), // User's home directory on the machine

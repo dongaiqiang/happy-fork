@@ -71,6 +71,15 @@ type V3PostSessionMessagesResponse = {
     }>;
 };
 
+export type DecryptedSessionMessage = {
+    id: string;
+    seq: number;
+    localId: string | null;
+    createdAt: number;
+    updatedAt: number;
+    body: unknown;
+};
+
 export class ApiSessionClient extends EventEmitter {
     private readonly token: string;
     readonly sessionId: string;
@@ -110,6 +119,7 @@ export class ApiSessionClient extends EventEmitter {
         this.metadataVersion = session.metadataVersion;
         this.agentState = session.agentState;
         this.agentStateVersion = session.agentStateVersion;
+        this.lastSeq = session.seq;
         this.encryptionKey = session.encryptionKey;
         this.encryptionVariant = session.encryptionVariant;
         this.sendSync = new InvalidateSync(() => this.flushOutbox());
@@ -233,10 +243,86 @@ export class ApiSessionClient extends EventEmitter {
         }
     }
 
+    async getRecentMessages(limit = 30): Promise<DecryptedSessionMessage[]> {
+        const safeLimit = Math.max(1, limit);
+        const recentMessages: DecryptedSessionMessage[] = [];
+        let afterSeq = 0;
+
+        while (true) {
+            try {
+                const response = await axios.get<V3GetSessionMessagesResponse>(
+                    `${configuration.serverUrl}/v3/sessions/${encodeURIComponent(this.sessionId)}/messages`,
+                    {
+                        params: {
+                            after_seq: afterSeq,
+                            limit: 100
+                        },
+                        headers: this.authHeaders(),
+                        timeout: 60000
+                    }
+                );
+
+                const messages = Array.isArray(response.data.messages) ? response.data.messages : [];
+                let maxSeq = afterSeq;
+
+                for (const message of messages) {
+                    if (message.seq > maxSeq) {
+                        maxSeq = message.seq;
+                    }
+
+                    if (message.content?.t !== 'encrypted') {
+                        continue;
+                    }
+
+                    try {
+                        recentMessages.push({
+                            id: message.id,
+                            seq: message.seq,
+                            localId: message.localId,
+                            createdAt: message.createdAt,
+                            updatedAt: message.updatedAt,
+                            body: decrypt(this.encryptionKey, this.encryptionVariant, decodeBase64(message.content.c))
+                        });
+                    } catch (error) {
+                        logger.debug('[API] Failed to decrypt history message', {
+                            sessionId: this.sessionId,
+                            seq: message.seq,
+                            error
+                        });
+                    }
+
+                    if (recentMessages.length > safeLimit) {
+                        recentMessages.splice(0, recentMessages.length - safeLimit);
+                    }
+                }
+
+                const hasMore = !!response.data.hasMore;
+                if (maxSeq === afterSeq && hasMore) {
+                    logger.debug('[API] getRecentMessages pagination stalled, stopping early', {
+                        sessionId: this.sessionId,
+                        afterSeq
+                    });
+                    break;
+                }
+
+                afterSeq = maxSeq;
+                if (!hasMore) {
+                    break;
+                }
+            } catch (error) {
+                logger.debug('[API] getRecentMessages failed', { sessionId: this.sessionId, error });
+                break;
+            }
+        }
+
+        return recentMessages;
+    }
+
     private authHeaders() {
         return {
             'Authorization': `Bearer ${this.token}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-Happy-Message-Source': 'cli'
         };
     }
 
@@ -624,6 +710,14 @@ export class ApiSessionClient extends EventEmitter {
                 }
             });
         });
+    }
+
+    getCurrentAgentState(): AgentState | null {
+        return this.agentState;
+    }
+
+    getCurrentMetadata(): Metadata | null {
+        return this.metadata;
     }
 
     /**

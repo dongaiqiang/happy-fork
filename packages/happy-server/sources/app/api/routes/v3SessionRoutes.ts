@@ -28,6 +28,7 @@ const handoffMacBodySchema = controlStateBodySchema.extend({
     machineId: z.string().min(1),
     directory: z.string().min(1),
     claudeSessionId: z.string().min(1),
+    tmuxSessionId: z.string().min(1).optional(),
     openTerminal: z.boolean().optional(),
     terminalCarrierMode: z.enum(['direct', 'hosted']).optional(),
     approvedNewDirectoryCreation: z.boolean().optional()
@@ -382,7 +383,7 @@ export function v3SessionRoutes(app: Fastify) {
     }, async (request, reply) => {
         const userId = request.userId;
         const { sessionId } = request.params;
-        const { expectedLeaseVersion, machineId, directory, claudeSessionId, openTerminal = true, terminalCarrierMode = 'direct', approvedNewDirectoryCreation = false } = request.body;
+        const { expectedLeaseVersion, machineId, directory, claudeSessionId, tmuxSessionId, openTerminal = true, terminalCarrierMode = 'hosted', approvedNewDirectoryCreation = false } = request.body;
         const current = await loadSessionControlState(userId, sessionId);
         if (!current) {
             return reply.code(404).send({ error: 'Session not found' });
@@ -495,6 +496,7 @@ export function v3SessionRoutes(app: Fastify) {
                 directory,
                 sessionId: claudeSessionId,
                 happySessionId: sessionId,
+                tmuxSessionId,
                 machineId,
                 openTerminal,
                 terminalCarrierMode,
@@ -555,6 +557,8 @@ export function v3SessionRoutes(app: Fastify) {
                 handoffState: 'switching'
             },
             data: {
+                controller: 'mac',
+                controllerLeaseVersion: expectedLeaseVersion + 1,
                 handoffState: 'idle',
                 handoffReason: null,
                 controllerUpdatedAt: new Date()
@@ -623,11 +627,21 @@ export function v3SessionRoutes(app: Fastify) {
                 id: sessionId,
                 accountId: userId
             },
-            select: { id: true }
+            select: {
+                id: true,
+                controller: true,
+                handoffState: true
+            }
         });
 
         if (!session) {
             return reply.code(404).send({ error: 'Session not found' });
+        }
+
+        if (session.handoffState === 'switching') {
+            return reply.code(409).send({
+                error: 'switching-in-progress'
+            });
         }
 
         const messages = await db.sessionMessage.findMany({
@@ -668,17 +682,31 @@ export function v3SessionRoutes(app: Fastify) {
         const userId = request.userId;
         const { sessionId } = request.params;
         const { messages } = request.body;
+        const writerSourceHeader = request.headers['x-happy-message-source'];
+        const isCliWriter = writerSourceHeader === 'cli';
 
         const session = await db.session.findFirst({
             where: {
                 id: sessionId,
                 accountId: userId
             },
-            select: { id: true }
+            select: {
+                id: true,
+                controller: true,
+                handoffState: true
+            }
         });
 
         if (!session) {
             return reply.code(404).send({ error: 'Session not found' });
+        }
+
+        if (session.handoffState === 'switching') {
+            return reply.code(409).send({ error: 'switching-in-progress' });
+        }
+
+        if (session.controller !== 'mobile' && !isCliWriter) {
+            return reply.code(409).send({ error: 'mobile-controller-required' });
         }
 
         const firstMessageByLocalId = new Map<string, { localId: string; content: string }>();
