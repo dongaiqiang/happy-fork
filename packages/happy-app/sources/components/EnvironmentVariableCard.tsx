@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useUnistyles } from 'react-native-unistyles';
 import { Typography } from '@/constants/Typography';
+import { t } from '@/text';
 import { useEnvironmentVariables } from '@/hooks/useEnvironmentVariables';
 
 export interface EnvironmentVariableCardProps {
@@ -97,6 +98,13 @@ export function EnvironmentVariableCard({
     // Determine status
     const showRemoteDiffersWarning = remoteValue !== null && expectedValue && remoteValue !== expectedValue;
     const showDefaultOverrideWarning = expectedValue && defaultValue !== expectedValue;
+    const sessionPreviewValue = isSecret
+        ? (useRemoteVariable && remoteVariableName
+            ? `\${${remoteVariableName}${defaultValue ? ':-***' : ''}} ${t('profiles.hiddenForSecuritySuffix')}`
+            : (defaultValue ? t('profiles.hiddenValue') : t('profiles.emptyValue')))
+        : (useRemoteVariable && remoteValue !== undefined && remoteValue !== null
+            ? remoteValue
+            : defaultValue || t('profiles.emptyValue'));
 
     return (
         <View style={{
@@ -176,7 +184,7 @@ export function EnvironmentVariableCard({
                     color: theme.colors.textSecondary,
                     ...Typography.default()
                 }}>
-                    First try copying variable from remote machine:
+                    {t('profiles.remoteVariableToggle')}
                 </Text>
             </Pressable>
 
@@ -193,7 +201,7 @@ export function EnvironmentVariableCard({
                     borderColor: theme.colors.textSecondary,
                     opacity: useRemoteVariable ? 1 : 0.5,
                 }}
-                placeholder="Variable name (e.g., Z_AI_MODEL)"
+                placeholder={t('profiles.remoteVariableNamePlaceholder')}
                 placeholderTextColor={theme.colors.input.placeholder}
                 value={remoteVariableName}
                 onChangeText={setRemoteVariableName}
@@ -212,7 +220,7 @@ export function EnvironmentVariableCard({
                             fontStyle: 'italic',
                             ...Typography.default()
                         }}>
-                            ⏳ Checking remote machine...
+                            {t('profiles.checkingRemoteMachine')}
                         </Text>
                     ) : remoteValue === null ? (
                         <Text style={{
@@ -220,7 +228,7 @@ export function EnvironmentVariableCard({
                             color: theme.colors.warning,
                             ...Typography.default()
                         }}>
-                            ✗ Value not found
+                            {t('profiles.valueNotFound')}
                         </Text>
                     ) : (
                         <>
@@ -229,7 +237,7 @@ export function EnvironmentVariableCard({
                                 color: theme.colors.success,
                                 ...Typography.default()
                             }}>
-                                ✓ Value found: {remoteValue}
+                                {t('profiles.valueFound', { value: remoteValue })}
                             </Text>
                             {showRemoteDiffersWarning && (
                                 <Text style={{
@@ -238,7 +246,7 @@ export function EnvironmentVariableCard({
                                     marginTop: 2,
                                     ...Typography.default()
                                 }}>
-                                    ⚠️ Differs from documented value: {expectedValue}
+                                    {t('profiles.differsFromDocumentedValue', { value: expectedValue })}
                                 </Text>
                             )}
                         </>
@@ -254,7 +262,7 @@ export function EnvironmentVariableCard({
                     fontStyle: 'italic',
                     ...Typography.default()
                 }}>
-                    ℹ️ Select a machine to check if variable exists
+                    {t('profiles.selectMachineToCheckVariableExists')}
                 </Text>
             )}
 
@@ -267,7 +275,7 @@ export function EnvironmentVariableCard({
                     fontStyle: 'italic',
                     ...Typography.default()
                 }}>
-                    🔒 Secret value - not retrieved for security
+                    {t('profiles.secretValueNotRetrievedForSecurity')}
                 </Text>
             )}
 
@@ -278,7 +286,7 @@ export function EnvironmentVariableCard({
                 marginBottom: 4,
                 ...Typography.default()
             }}>
-                Default value:
+                {t('profiles.defaultValue')}
             </Text>
 
             {/* Default value input */}
@@ -293,7 +301,7 @@ export function EnvironmentVariableCard({
                     borderWidth: 1,
                     borderColor: theme.colors.textSecondary,
                 }}
-                placeholder={expectedValue || "Value"}
+                placeholder={expectedValue || t('profiles.valuePlaceholder')}
                 placeholderTextColor={theme.colors.input.placeholder}
                 value={defaultValue}
                 onChangeText={setDefaultValue}
@@ -310,7 +318,7 @@ export function EnvironmentVariableCard({
                     marginBottom: 8,
                     ...Typography.default()
                 }}>
-                    ⚠️ Overriding documented default: {expectedValue}
+                    {t('profiles.overridingDocumentedDefault', { value: expectedValue })}
                 </Text>
             )}
 
@@ -321,15 +329,7 @@ export function EnvironmentVariableCard({
                 marginTop: 4,
                 ...Typography.default()
             }}>
-                Session will receive: {variable.name} = {
-                    isSecret
-                        ? (useRemoteVariable && remoteVariableName
-                            ? `\${${remoteVariableName}${defaultValue ? `:-***` : ''}} - hidden for security`
-                            : (defaultValue ? '***hidden***' : '(empty)'))
-                        : (useRemoteVariable && remoteValue !== undefined && remoteValue !== null
-                            ? remoteValue
-                            : defaultValue || '(empty)')
-                }
+                {t('profiles.sessionWillReceive', { variableName: variable.name, value: sessionPreviewValue })}
             </Text>
         </View>
     );

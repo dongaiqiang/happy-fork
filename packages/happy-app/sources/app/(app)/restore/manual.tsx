@@ -1,19 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthContext';
 import { RoundButton } from '@/components/RoundButton';
 import { Typography } from '@/constants/Typography';
 import { normalizeSecretKey } from '@/auth/secretKeyBackup';
 import { authGetToken } from '@/auth/authGetToken';
-import { decodeBase64, encodeBase64 } from '@/encryption/base64';
-import { generateAuthKeyPair, authQRStart, QRAuthKeyPair } from '@/auth/authQRStart';
-import { authQRWait } from '@/auth/authQRWait';
+import { decodeBase64 } from '@/encryption/base64';
 import { layout } from '@/components/layout';
 import { Modal } from '@/modal';
 import { t } from '@/text';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
-import { QRCode } from '@/components/qr/QRCode';
 
 const stylesheet = StyleSheet.create((theme) => ({
     scrollView: {
@@ -112,12 +109,12 @@ export default function Restore() {
             <View style={styles.container}>
                 <View style={styles.contentWrapper}>
                     <Text style={styles.instructionText}>
-                        Enter your secret key to restore access to your account.
+                        {t('restore.enterSecretKeyInstructions')}
                     </Text>
 
                     <TextInput
                         style={styles.textInput}
-                        placeholder="XXXXX-XXXXX-XXXXX..."
+                        placeholder={t('restore.secretKeyPlaceholder')}
                         placeholderTextColor={theme.colors.input.placeholder}
                         value={restoreKey}
                         onChangeText={setRestoreKey}

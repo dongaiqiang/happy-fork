@@ -64,8 +64,33 @@ function StatusDot({ color, isPulsing, size = 8 }: { color: string; isPulsing?: 
 
 function formatSandboxMetadata(sandbox: unknown, homeDir?: string): string {
     if (sandbox === null || sandbox === undefined) {
-        return 'Disabled';
+        return t('sessionInfo.disabled');
     }
+
+
+function normalizeOpenInMacReason(reason: string): string {
+    const normalized = reason.trim().toLowerCase();
+    if (normalized === 'not found' || normalized.includes('no conversation found')) {
+        return 'claude-session-not-found';
+    }
+    return reason;
+}
+
+function buildOpenInMacErrorMessage(reason: string, claudeSessionId: string, directory: string): string {
+    const normalizedReason = normalizeOpenInMacReason(reason);
+    if (normalizedReason === 'open-in-mac-route-not-found') {
+        return t('sessionInfo.openOnMacRouteMissing', { claudeSessionId, directory });
+    }
+    const reasonHint = normalizedReason.includes('claude-session-not-found')
+        ? t('sessionInfo.openOnMacAuthHint')
+        : undefined;
+    return t('sessionInfo.openOnMacFailedWithReason', {
+        reason: normalizedReason,
+        claudeSessionId,
+        directory,
+        hint: reasonHint
+    });
+}
 
     if (typeof sandbox === 'string') {
         return sandbox;
@@ -77,22 +102,22 @@ function formatSandboxMetadata(sandbox: unknown, homeDir?: string): string {
 
     const value = sandbox as Record<string, unknown>;
     if (value.enabled === false) {
-        return 'Disabled';
+        return t('sessionInfo.disabled');
     }
 
-    const parts: string[] = ['Enabled'];
+    const parts: string[] = [t('sessionInfo.enabled')];
     const isolation = typeof value.sessionIsolation === 'string' ? value.sessionIsolation : undefined;
     const networkMode = typeof value.networkMode === 'string' ? value.networkMode : undefined;
     const workspaceRoot = typeof value.workspaceRoot === 'string' ? value.workspaceRoot : undefined;
 
     if (isolation) {
-        parts.push(`isolation=${isolation}`);
+        parts.push(t('sessionInfo.sandboxIsolation', { value: isolation }));
     }
     if (networkMode) {
-        parts.push(`network=${networkMode}`);
+        parts.push(t('sessionInfo.sandboxNetwork', { value: networkMode }));
     }
     if (workspaceRoot) {
-        parts.push(`workspace=${formatPathRelativeToHome(workspaceRoot, homeDir)}`);
+        parts.push(t('sessionInfo.sandboxWorkspace', { value: formatPathRelativeToHome(workspaceRoot, homeDir) }));
     }
 
     return parts.join(' | ');
@@ -105,21 +130,45 @@ function formatDangerouslySkipPermissionsMetadata(
     sandbox: unknown,
 ): string {
     if (typeof value === 'boolean') {
-        return value ? 'Enabled' : 'Disabled';
+        return value ? t('sessionInfo.enabled') : t('sessionInfo.disabled');
     }
 
     if (permissionMode === 'bypassPermissions' || permissionMode === 'yolo') {
-        return 'Enabled';
+        return t('sessionInfo.enabled');
     }
 
     if (flavor === 'claude' && sandbox && typeof sandbox === 'object') {
         const sandboxValue = sandbox as Record<string, unknown>;
         if (sandboxValue.enabled === true) {
-            return 'Enabled';
+            return t('sessionInfo.enabled');
         }
     }
 
-    return 'Unknown';
+    return t('status.unknown');
+}
+
+function normalizeOpenInMacReason(reason: string): string {
+    const normalized = reason.trim().toLowerCase();
+    if (normalized === 'not found' || normalized.includes('no conversation found')) {
+        return 'claude-session-not-found';
+    }
+    return reason;
+}
+
+function buildOpenInMacErrorMessage(reason: string, claudeSessionId: string, directory: string): string {
+    const normalizedReason = normalizeOpenInMacReason(reason);
+    if (normalizedReason === 'open-in-mac-route-not-found') {
+        return t('sessionInfo.openOnMacRouteMissing', { claudeSessionId, directory });
+    }
+    const reasonHint = normalizedReason.includes('claude-session-not-found')
+        ? t('sessionInfo.openOnMacAuthHint')
+        : undefined;
+    return t('sessionInfo.openOnMacFailedWithReason', {
+        reason: normalizedReason,
+        claudeSessionId,
+        directory,
+        hint: reasonHint
+    });
 }
 
 function SessionInfoContent({ session }: { session: Session }) {
@@ -290,13 +339,13 @@ function SessionInfoContent({ session }: { session: Session }) {
         const directory = session.metadata?.path;
         const claudeSessionId = session.metadata?.claudeSessionId;
         if (!machineId || !directory || !claudeSessionId) {
-            Modal.alert(t('common.error'), 'This session cannot be resumed because required metadata is missing.');
+            Modal.alert(t('common.error'), t('sessionInfo.resumeMissingMetadata'));
             return;
         }
         const candidateMachineIds = await getCandidateMachineIds();
 
         if (candidateMachineIds.length === 0) {
-            Modal.alert(t('common.error'), `当前没有可用于恢复的在线机器。这个历史会话绑定的机器 ID 是 ${machineId}，但 App 没有拿到它对应的加密信息。通常是旧机器记录已经失效，需要刷新机器列表或重新登录后再试。`);
+            Modal.alert(t('common.error'), t('sessionInfo.resumeNoAvailableMachine', { machineId }));
             return;
         }
 
@@ -318,7 +367,11 @@ function SessionInfoContent({ session }: { session: Session }) {
                         router.push(`/session/${result.sessionId}`);
                         return;
                     case 'requestToApproveDirectoryCreation': {
-                        const approved = await Modal.confirm('Create Directory?', `The directory '${result.directory}' does not exist. Would you like to create it?`, { cancelText: t('common.cancel'), confirmText: t('common.create') });
+                        const approved = await Modal.confirm(
+                            t('sessionInfo.createDirectoryTitle'),
+                            t('sessionInfo.createDirectoryMessage', { directory: result.directory }),
+                            { cancelText: t('common.cancel'), confirmText: t('common.create') }
+                        );
                         if (!approved) {
                             return;
                         }
@@ -333,10 +386,10 @@ function SessionInfoContent({ session }: { session: Session }) {
             }
         }
         if (lastErrorMessage === 'RPC method not available') {
-            Modal.alert(t('common.error'), 'Daemon 进程虽然已启动，但它当前没有连上后端的 WebSocket，所以服务器找不到这台机器的 RPC 能力。请重启 happy-server 和 daemon 后再试。');
+            Modal.alert(t('common.error'), t('sessionInfo.resumeRpcUnavailable'));
             return;
         }
-        Modal.alert(t('common.error'), lastErrorMessage || 'Machine is offline. Start daemon on this machine and try again.');
+        Modal.alert(t('common.error'), lastErrorMessage || t('sessionInfo.resumeMachineOffline'));
     }, [getCandidateMachineIds, machine, router, session.metadata?.claudeSessionId, session.metadata?.machineId, session.metadata?.path]);
 
     const isResumeCapableSession = (!!session.metadata?.machineId)
@@ -380,11 +433,11 @@ function SessionInfoContent({ session }: { session: Session }) {
             }
         };
         if (!machineId || !directory || !claudeSessionId) {
-            throw new HappyError('This session cannot be handed off because required metadata is missing.', false);
+            throw new HappyError(t('sessionInfo.openOnMacMissingMetadata'), false);
         }
         const candidateMachineIds = await getCandidateMachineIds();
         if (candidateMachineIds.length === 0) {
-            throw new HappyError(`当前没有可用于 Open in Mac 的在线机器。这个历史会话绑定的机器 ID 是 ${machineId}，但 App 没有拿到它对应的加密信息。通常是旧机器记录已经失效，需要刷新机器列表或重新登录后再试。`, false);
+            throw new HappyError(t('sessionInfo.openOnMacNoAvailableMachine', { machineId }), false);
         }
 
         let result: Awaited<ReturnType<typeof sessionHandoffToMac>> | null = null;
@@ -442,7 +495,7 @@ function SessionInfoContent({ session }: { session: Session }) {
                         ? spawnResult.errorMessage
                         : 'directory-approval-required';
                     throw new HappyError(
-                        `Open in Mac failed\nreason: ${fallbackReason || reason}\nclaudeSessionId: ${claudeSessionId}\ndirectory: ${directory}`,
+                        buildOpenInMacErrorMessage(fallbackReason || reason, claudeSessionId, directory),
                         false
                     );
                 }
@@ -457,22 +510,19 @@ function SessionInfoContent({ session }: { session: Session }) {
                 }
                 await refreshControlState();
                 Modal.alert(t('common.success'), spawnResult.sessionId && spawnResult.sessionId !== session.id
-                    ? '已在 Mac 打开 Claude 会话，并切换到新的同步会话；当前默认由 Mac 控制'
-                    : '已在 Mac 打开 Claude 会话；当前默认由 Mac 控制，手机端只读');
+                    ? t('sessionInfo.openOnMacSuccessNewSession')
+                    : t('sessionInfo.openOnMacSuccessSameSession'));
                 return;
             }
-            const reasonHint = reason.includes('claude-session-not-found')
-                ? '\nhint: daemon Claude auth/profile may differ from your terminal. Restart daemon with the same auth context and retry.'
-                : '';
             throw new HappyError(
-                `Open in Mac failed\nreason: ${reason}\nclaudeSessionId: ${claudeSessionId}\ndirectory: ${directory}${reasonHint}`,
+                buildOpenInMacErrorMessage(reason, claudeSessionId, directory),
                 false
             );
         }
         await syncToResumedSession(result.resumedHappySessionId);
         Modal.alert(t('common.success'), result.resumedHappySessionId && result.resumedHappySessionId !== session.id
-            ? '已在 Mac 打开 Claude 会话，并切换到新的同步会话；当前默认由 Mac 控制'
-            : '已在 Mac 打开 Claude 会话；当前默认由 Mac 控制，手机端只读');
+            ? t('sessionInfo.openOnMacSuccessNewSession')
+            : t('sessionInfo.openOnMacSuccessSameSession'));
     });
 
     const switchController = useCallback(async (targetController: 'mobile' | 'mac') => {
@@ -481,12 +531,12 @@ function SessionInfoContent({ session }: { session: Session }) {
         if (targetController === 'mac') {
             const switched = await sessionSwitch(session.id, 'local');
             if (!switched) {
-                throw new HappyError('切换到 Mac 控制失败：会话没有接受切换请求。', false);
+                throw new HappyError(t('sessionInfo.switchControlToMacFailed'), false);
             }
         } else {
             const switched = await sessionSwitch(session.id, 'remote');
             if (!switched) {
-                throw new HappyError('切回手机控制失败：会话没有接受切换请求。', false);
+                throw new HappyError(t('sessionInfo.switchControlToMobileFailed'), false);
             }
         }
 
@@ -505,8 +555,8 @@ function SessionInfoContent({ session }: { session: Session }) {
         Modal.alert(
             t('common.success'),
             targetController === 'mac'
-                ? '已切换为 Mac 控制，手机端现在只读'
-                : '已切回手机控制，Mac 端现在只读'
+                ? t('sessionInfo.switchControlToMacSuccess')
+                : t('sessionInfo.switchControlToMobileSuccess')
         );
     }, [effectiveControlState?.leaseVersion, refreshControlState, session.id]);
 
@@ -522,18 +572,18 @@ function SessionInfoContent({ session }: { session: Session }) {
 
     const handleOpenInMac = useCallback(() => {
         if (handingOffToMac) {
-            Modal.alert('请稍后', '正在切换到 Mac，请勿重复点击。');
+            Modal.alert(t('common.loading'), t('sessionInfo.openOnMacOpeningSubtitle'));
             return;
         }
         Modal.alert(
-            'Open in Mac',
+            t('sessionInfo.openOnMacTitle'),
             hasTmuxOpenInMacSupport
-                ? 'Open this session on Mac? After opening, Mac becomes the default controller and mobile turns read-only until you switch back.'
-                : `This session is not tmux-hosted yet. Happy will try to create a tmux-hosted Claude terminal on your Mac first.\n\nDebug info:\n${openInMacDebugDetails}`,
+                ? t('sessionInfo.openOnMacDescription')
+                : t('sessionInfo.openOnMacSetupDescription', { debugDetails: openInMacDebugDetails }),
             [
                 { text: t('common.cancel'), style: 'cancel' },
                 {
-                    text: 'Open in Mac',
+                    text: t('sessionInfo.openOnMacConfirm'),
                     onPress: performHandoffToMac
                 }
             ]
@@ -694,8 +744,8 @@ function SessionInfoContent({ session }: { session: Session }) {
                     )}
                     {canResumeSession && (
                         <Item
-                            title="Resume Session"
-                            subtitle="Continue from this historical session context"
+                            title={t('sessionInfo.resumeSession')}
+                            subtitle={t('sessionInfo.resumeSessionSubtitle')}
                             icon={<Ionicons name="play-circle-outline" size={29} color="#34C759" />}
                             onPress={() => {
                                 void resumeSession();
@@ -704,12 +754,12 @@ function SessionInfoContent({ session }: { session: Session }) {
                     )}
                     {canOpenInMac && (
                         <Item
-                            title="Open in Mac"
+                            title={t('sessionInfo.openOnMacTitle')}
                             subtitle={handingOffToMac
-                                ? 'Opening session on Mac...'
+                                ? t('sessionInfo.openOnMacOpeningSubtitle')
                                 : hasTmuxOpenInMacSupport
-                                    ? 'Open the same session on Mac while mobile stays controller'
-                                    : 'Try to create a tmux-hosted Claude terminal on your Mac for this session'
+                                    ? t('sessionInfo.openOnMacReadySubtitle')
+                                    : t('sessionInfo.openOnMacSetupSubtitle')
                             }
                             icon={<Ionicons name="desktop-outline" size={29} color="#5856D6" />}
                             onPress={handleOpenInMac}
@@ -717,16 +767,16 @@ function SessionInfoContent({ session }: { session: Session }) {
                     )}
                     {canSwitchControlToMac && (
                         <Item
-                            title="Switch Control to Mac"
-                            subtitle={switchingControl ? 'Switching control to Mac...' : 'Make Mac writable and keep mobile read-only'}
+                            title={t('sessionInfo.switchControlToMac')}
+                            subtitle={switchingControl ? t('sessionInfo.switchControlToMacLoading') : t('sessionInfo.switchControlToMacSubtitle')}
                             icon={<Ionicons name="swap-horizontal-outline" size={29} color="#5856D6" />}
                             onPress={performSwitchToMac}
                         />
                     )}
                     {canSwitchControlToMobile && (
                         <Item
-                            title="Switch Control to Mobile"
-                            subtitle={switchingControl ? 'Switching control to mobile...' : 'Return write control to mobile and keep Mac read-only'}
+                            title={t('sessionInfo.switchControlToMobile')}
+                            subtitle={switchingControl ? t('sessionInfo.switchControlToMobileLoading') : t('sessionInfo.switchControlToMobileSubtitle')}
                             icon={<Ionicons name="phone-portrait-outline" size={29} color="#34C759" />}
                             onPress={performSwitchToMobile}
                         />
@@ -786,13 +836,13 @@ function SessionInfoContent({ session }: { session: Session }) {
                             showChevron={false}
                         />
                         <Item
-                            title="Sandbox"
+                            title={t('sessionInfo.sandbox')}
                             subtitle={formatSandboxMetadata(session.metadata.sandbox, session.metadata.homeDir)}
                             icon={<Ionicons name="shield-outline" size={29} color="#5856D6" />}
                             showChevron={false}
                         />
                         <Item
-                            title="Dangerously Skip Permissions"
+                            title={t('sessionInfo.permissionBypass')}
                             subtitle={formatDangerouslySkipPermissionsMetadata(
                                 session.metadata.dangerouslySkipPermissions,
                                 session.metadata.flavor,
@@ -866,11 +916,11 @@ function SessionInfoContent({ session }: { session: Session }) {
 
                 {/* Raw JSON (Dev Mode Only) */}
                 {devModeEnabled && (
-                    <ItemGroup title="Raw JSON (Dev Mode)">
+                    <ItemGroup title={t('tools.fullView.rawJsonDevMode')}>
                         {session.agentState && (
                             <>
                                 <Item
-                                    title="Agent State"
+                                    title={t('sessionInfo.agentState')}
                                     icon={<Ionicons name="code-working-outline" size={29} color="#FF9500" />}
                                     showChevron={false}
                                 />
@@ -885,7 +935,7 @@ function SessionInfoContent({ session }: { session: Session }) {
                         {session.metadata && (
                             <>
                                 <Item
-                                    title="Metadata"
+                                    title={t('sessionInfo.metadata')}
                                     icon={<Ionicons name="information-circle-outline" size={29} color="#5856D6" />}
                                     showChevron={false}
                                 />
@@ -900,7 +950,7 @@ function SessionInfoContent({ session }: { session: Session }) {
                         {sessionStatus && (
                             <>
                                 <Item
-                                    title="Session Status"
+                                    title={t('sessionInfo.sessionStatus')}
                                     icon={<Ionicons name="analytics-outline" size={29} color="#007AFF" />}
                                     showChevron={false}
                                 />
@@ -920,7 +970,7 @@ function SessionInfoContent({ session }: { session: Session }) {
                         )}
                         {/* Full Session Object */}
                         <Item
-                            title="Full Session Object"
+                            title={t('sessionInfo.fullSessionObject')}
                             icon={<Ionicons name="document-text-outline" size={29} color="#34C759" />}
                             showChevron={false}
                         />

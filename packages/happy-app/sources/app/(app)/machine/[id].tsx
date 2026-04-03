@@ -111,40 +111,40 @@ export default function MachineDetailScreen() {
 
     // Determine daemon status from metadata
     const daemonStatus = useMemo(() => {
-        if (!machine) return 'unknown';
+        if (!machine) return t('status.unknown');
 
         // Check metadata for daemon status
         const metadata = machine.metadata as any;
         if (metadata?.daemonLastKnownStatus === 'shutting-down') {
-            return 'stopped';
+            return t('machine.daemonStoppedState');
         }
 
         // Use machine online status as proxy for daemon status
-        return isMachineOnline(machine) ? 'likely alive' : 'stopped';
+        return isMachineOnline(machine) ? t('machine.daemonLikelyAlive') : t('machine.daemonStoppedState');
     }, [machine]);
 
     const handleStopDaemon = async () => {
         // Show confirmation modal using alert with buttons
         Modal.alert(
-            'Stop Daemon?',
-            'You will not be able to spawn new sessions on this machine until you restart the daemon on your computer again. Your current sessions will stay alive.',
+            t('machine.stopDaemonConfirmTitle'),
+            t('machine.stopDaemonConfirmMessage'),
             [
                 {
-                    text: 'Cancel',
+                    text: t('common.cancel'),
                     style: 'cancel'
                 },
                 {
-                    text: 'Stop Daemon',
+                    text: t('machine.stopDaemon'),
                     style: 'destructive',
                     onPress: async () => {
                         setIsStoppingDaemon(true);
                         try {
                             const result = await machineStopDaemon(machineId!);
-                            Modal.alert('Daemon Stopped', result.message);
+                            Modal.alert(t('machine.daemonStopped'), result.message);
                             // Refresh to get updated metadata
                             await sync.refreshMachines();
                         } catch (error) {
-                            Modal.alert(t('common.error'), 'Failed to stop daemon. It may not be running.');
+                            Modal.alert(t('common.error'), t('machine.stopDaemonFailed'));
                         } finally {
                             setIsStoppingDaemon(false);
                         }
@@ -166,11 +166,11 @@ export default function MachineDetailScreen() {
         if (!machine || !machineId) return;
 
         const newDisplayName = await Modal.prompt(
-            'Rename Machine',
-            'Give this machine a custom name. Leave empty to use the default hostname.',
+            t('machine.renameMachineTitle'),
+            t('machine.renameMachineMessage'),
             {
                 defaultValue: machine.metadata?.displayName || '',
-                placeholder: machine.metadata?.host || 'Enter machine name',
+                placeholder: machine.metadata?.host || t('machine.renameMachinePlaceholder'),
                 cancelText: t('common.cancel'),
                 confirmText: t('common.rename')
             }
@@ -190,11 +190,11 @@ export default function MachineDetailScreen() {
                     machine.metadataVersion
                 );
                 
-                Modal.alert(t('common.success'), 'Machine renamed successfully');
+                Modal.alert(t('common.success'), t('machine.renameMachineSuccess'));
             } catch (error) {
                 Modal.alert(
-                    'Error',
-                    error instanceof Error ? error.message : 'Failed to rename machine'
+                    t('common.error'),
+                    error instanceof Error ? error.message : t('machine.renameMachineFailed')
                 );
                 // Refresh to get latest state
                 await sync.refreshMachines();
@@ -224,7 +224,11 @@ export default function MachineDetailScreen() {
                     navigateToSession(result.sessionId);
                     break;
                 case 'requestToApproveDirectoryCreation': {
-                    const approved = await Modal.confirm('Create Directory?', `The directory '${result.directory}' does not exist. Would you like to create it?`, { cancelText: t('common.cancel'), confirmText: t('common.create') });
+                    const approved = await Modal.confirm(
+                        t('machine.createDirectoryTitle'),
+                        t('machine.createDirectoryMessage', { directory: result.directory }),
+                        { cancelText: t('common.cancel'), confirmText: t('common.create') },
+                    );
                     if (approved) {
                         await handleStartSession(true);
                     }
@@ -235,7 +239,7 @@ export default function MachineDetailScreen() {
                     break;
             }
         } catch (error) {
-            let errorMessage = 'Failed to start session. Make sure the daemon is running on the target machine.';
+            let errorMessage = t('machine.startSessionFailed');
             if (error instanceof Error && !error.message.includes('Failed to spawn session')) {
                 errorMessage = error.message;
             }
@@ -246,7 +250,7 @@ export default function MachineDetailScreen() {
     };
 
     const pastUsedRelativePath = useCallback((session: Session) => {
-        if (!session.metadata) return 'unknown path';
+        if (!session.metadata) return t('machine.unknownPath');
         return formatPathRelativeToHome(session.metadata.path, session.metadata.homeDir);
     }, []);
 
@@ -262,7 +266,7 @@ export default function MachineDetailScreen() {
                 />
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                     <Text style={[Typography.default(), { fontSize: 16, color: '#666' }]}>
-                        Machine not found
+                        {t('machine.machineNotFound')}
                     </Text>
                 </View>
             </>
@@ -270,7 +274,7 @@ export default function MachineDetailScreen() {
     }
 
     const metadata = machine.metadata;
-    const machineName = metadata?.displayName || metadata?.host || 'unknown machine';
+    const machineName = metadata?.displayName || metadata?.host || t('machine.unknownMachine');
 
     const spawnButtonDisabled = !customPath.trim() || isSpawning || !isMachineOnline(machine!);
 
@@ -358,7 +362,7 @@ export default function MachineDetailScreen() {
                                         ref={inputRef}
                                         value={customPath}
                                         onChangeText={setCustomPath}
-                                        placeholder={'Enter custom path'}
+                                        placeholder={t('machineLauncher.enterCustomPath')}
                                         maxHeight={76}
                                         paddingTop={8}
                                         paddingBottom={8}
@@ -427,17 +431,17 @@ export default function MachineDetailScreen() {
                             title={t('machine.status')}
                             detail={daemonStatus}
                             detailStyle={{
-                                color: daemonStatus === 'likely alive' ? '#34C759' : '#FF9500'
+                                color: daemonStatus === t('machine.daemonLikelyAlive') ? '#34C759' : '#FF9500'
                             }}
                             showChevron={false}
                         />
                         <Item
                             title={t('machine.stopDaemon')}
                             titleStyle={{ 
-                                color: daemonStatus === 'stopped' ? '#999' : '#FF9500' 
+                                color: daemonStatus === t('machine.daemonStoppedState') ? '#999' : '#FF9500' 
                             }}
-                            onPress={daemonStatus === 'stopped' ? undefined : handleStopDaemon}
-                            disabled={isStoppingDaemon || daemonStatus === 'stopped'}
+                            onPress={daemonStatus === t('machine.daemonStoppedState') ? undefined : handleStopDaemon}
+                            disabled={isStoppingDaemon || daemonStatus === t('machine.daemonStoppedState')}
                             rightElement={
                                 isStoppingDaemon ? (
                                     <ActivityIndicator size="small" color={theme.colors.textSecondary} />
@@ -445,7 +449,7 @@ export default function MachineDetailScreen() {
                                     <Ionicons 
                                         name="stop-circle" 
                                         size={20} 
-                                        color={daemonStatus === 'stopped' ? '#999' : '#FF9500'} 
+                                        color={daemonStatus === t('machine.daemonStoppedState') ? '#999' : '#FF9500'} 
                                     />
                                 )
                             }
@@ -489,7 +493,7 @@ export default function MachineDetailScreen() {
 
                 {/* Previous Sessions (debug view) */}
                 {previousSessions.length > 0 && (
-                    <ItemGroup title={'Previous Sessions (up to 5 most recent)'}>
+                    <ItemGroup title={t('machine.previousSessionsTitle')}>
                         {previousSessions.map(session => (
                             <Item
                                 key={session.id}

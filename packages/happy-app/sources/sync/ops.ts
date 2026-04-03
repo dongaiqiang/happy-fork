@@ -612,6 +612,27 @@ export async function sessionHandoffToMac(options: {
     terminalCarrierMode?: 'direct' | 'hosted';
     approvedNewDirectoryCreation?: boolean;
 }): Promise<{ success: boolean; state?: SessionControlState; message?: string; error?: string; resumedHappySessionId?: string }> {
+    const normalizeHandoffFailure = (responseStatus: number, payload: { error?: string; message?: string }) => {
+        const rawReason = (payload.message || payload.error || '').trim();
+        const normalizedReason = rawReason.toLowerCase();
+        if (responseStatus === 404 && normalizedReason === 'not found') {
+            return {
+                error: 'open-in-mac-route-not-found',
+                message: 'open-in-mac-route-not-found'
+            };
+        }
+        if (normalizedReason === 'not found' || normalizedReason.includes('no conversation found')) {
+            return {
+                error: 'claude-session-not-found',
+                message: 'claude-session-not-found'
+            };
+        }
+        return {
+            error: payload.error,
+            message: payload.message || payload.error || `handoff failed (${responseStatus})`
+        };
+    };
+
     try {
         const response = await apiSocket.request(`/v3/sessions/${options.sessionId}/handoff/mac`, {
             method: 'POST',
@@ -635,11 +656,12 @@ export async function sessionHandoffToMac(options: {
             resumedHappySessionId?: string;
         };
         if (!response.ok || !payload.success) {
+            const failure = normalizeHandoffFailure(response.status, payload);
             return {
                 success: false,
-                error: payload.error,
+                error: failure.error,
                 state: payload.state,
-                message: payload.message || payload.error || `handoff failed (${response.status})`
+                message: failure.message
             };
         }
         return {

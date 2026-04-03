@@ -9,6 +9,9 @@ import { useCheckScannerPermissions } from '@/hooks/useCheckCameraPermissions';
 import { Modal } from '@/modal';
 import { t } from '@/text';
 
+const ACCOUNT_AUTH_URL_PREFIX = 'hellovibe:///account?';
+const LEGACY_ACCOUNT_AUTH_URL_PREFIX = 'happy:///account?';
+
 interface UseConnectAccountOptions {
     onSuccess?: () => void;
     onError?: (error: any) => void;
@@ -20,14 +23,17 @@ export function useConnectAccount(options?: UseConnectAccountOptions) {
     const checkScannerPermissions = useCheckScannerPermissions();
 
     const processAuthUrl = React.useCallback(async (url: string) => {
-        if (!url.startsWith('happy:///account?')) {
+        const matchedPrefix = [ACCOUNT_AUTH_URL_PREFIX, LEGACY_ACCOUNT_AUTH_URL_PREFIX]
+            .find((prefix) => url.startsWith(prefix));
+
+        if (!matchedPrefix) {
             Modal.alert(t('common.error'), t('modals.invalidAuthUrl'), [{ text: t('common.ok') }]);
             return false;
         }
         
         setIsLoading(true);
         try {
-            const tail = url.slice('happy:///account?'.length);
+            const tail = url.slice(matchedPrefix.length);
             const publicKey = decodeBase64(tail, 'base64url');
             const response = encryptBox(decodeBase64(auth.credentials!.secret, 'base64url'), publicKey);
             await authAccountApprove(auth.credentials!.token, publicKey, response);
@@ -68,7 +74,7 @@ export function useConnectAccount(options?: UseConnectAccountOptions) {
     React.useEffect(() => {
         if (CameraView.isModernBarcodeScannerAvailable) {
             const subscription = CameraView.onModernBarcodeScanned(async (event) => {
-                if (event.data.startsWith('happy:///account?')) {
+                if (event.data.startsWith(ACCOUNT_AUTH_URL_PREFIX) || event.data.startsWith(LEGACY_ACCOUNT_AUTH_URL_PREFIX)) {
                     // Dismiss scanner on Android is called automatically when barcode is scanned
                     if (Platform.OS === 'ios') {
                         await CameraView.dismissScanner();

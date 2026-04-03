@@ -1,11 +1,10 @@
-import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Item } from '@/components/Item';
 import { ItemGroup } from '@/components/ItemGroup';
 import { ItemList } from '@/components/ItemList';
 import { useSettingMutable } from '@/sync/storage';
-import { useUnistyles } from 'react-native-unistyles';
-import { t, getLanguageNativeName, SUPPORTED_LANGUAGES, SUPPORTED_LANGUAGE_CODES, type SupportedLanguage } from '@/text';
+import { t, type SupportedLanguage } from '@/text';
+import { getLanguageNativeName, SUPPORTED_LANGUAGES, SUPPORTED_LANGUAGE_CODES, resolveSupportedLanguageFromLocale } from '@/text/_all';
 import { Modal } from '@/modal';
 import { useUpdates } from '@/hooks/useUpdates';
 import * as Localization from 'expo-localization';
@@ -19,16 +18,15 @@ interface LanguageItem {
 }
 
 export default function LanguageSettingsScreen() {
-    const { theme } = useUnistyles();
     const [preferredLanguage, setPreferredLanguage] = useSettingMutable('preferredLanguage');
     const { reloadApp } = useUpdates();
 
     // Get device locale for automatic detection
-    const deviceLocale = Localization.getLocales()?.[0]?.languageTag ?? 'en-US';
-    const deviceLanguage = deviceLocale.split('-')[0].toLowerCase();
-    const detectedLanguageName = deviceLanguage in SUPPORTED_LANGUAGES ? 
-                                 getLanguageNativeName(deviceLanguage as keyof typeof SUPPORTED_LANGUAGES) : 
-                                 getLanguageNativeName('en');
+    const deviceLocale = Localization.getLocales()?.[0];
+    const detectedLanguage = resolveSupportedLanguageFromLocale(deviceLocale) ?? 'en';
+    const detectedLanguageName = detectedLanguage in SUPPORTED_LANGUAGES
+        ? getLanguageNativeName(detectedLanguage)
+        : getLanguageNativeName('en');
 
     // Current selection
     const currentSelection: LanguageOption = preferredLanguage === null ? 'auto' : 

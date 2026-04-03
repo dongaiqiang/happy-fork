@@ -29,7 +29,7 @@ describe('happy-agent CLI', () => {
     it('should display help output', () => {
         const { stdout } = runCli('--help');
         expect(stdout).toContain('happy-agent');
-        expect(stdout).toContain('CLI client for controlling Happy Coder agents remotely');
+        expect(stdout).toContain('CLI client for controlling HelloVibe agents remotely');
     });
 
     it('should display version', () => {

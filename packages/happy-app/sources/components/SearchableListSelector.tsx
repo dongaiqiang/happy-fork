@@ -40,6 +40,7 @@ export interface SelectorConfig<T> {
     searchPlaceholder: string;
     recentSectionTitle: string;
     favoritesSectionTitle: string;
+    allItemsSectionTitle?: string;
     noItemsMessage: string;
 
     // Optional features
@@ -59,6 +60,9 @@ export interface SelectorConfig<T> {
 
     // Check if a favorite item can be removed (e.g., home directory can't be removed)
     canRemoveFavorite?: (item: T) => boolean;
+    removeFavoriteTitle?: string;
+    removeFavoriteMessage?: (item: T, context?: any) => string;
+    removeFavoriteConfirmText?: string;
 
     // Visual customization
     compactItems?: boolean; // Use reduced padding for more compact lists (default: false)
@@ -371,12 +375,12 @@ export function SearchableListSelector<T>(props: SearchableListSelectorProps<T>)
         if (!onToggleFavorite) return;
 
         Modal.alert(
-            'Remove Favorite',
-            `Remove "${config.getItemTitle(item)}" from ${config.favoritesSectionTitle.toLowerCase()}?`,
+            config.removeFavoriteTitle ?? t('common.remove'),
+            config.removeFavoriteMessage?.(item, context) ?? config.getItemTitle(item),
             [
                 { text: t('common.cancel'), style: 'cancel' },
                 {
-                    text: 'Remove',
+                    text: config.removeFavoriteConfirmText ?? t('common.remove'),
                     style: 'destructive',
                     onPress: () => onToggleFavorite(item)
                 }
@@ -647,7 +651,7 @@ export function SearchableListSelector<T>(props: SearchableListSelectorProps<T>)
                         onPress={toggleAllItemsSection}
                     >
                         <Text style={styles.sectionHeaderText}>
-                            {config.recentSectionTitle.replace('Recent ', 'All ')}
+                            {config.allItemsSectionTitle ?? config.recentSectionTitle}
                         </Text>
                         <Ionicons
                             name={showAllItemsSection ? "chevron-up" : "chevron-down"}

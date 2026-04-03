@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthContext';
 import { RoundButton } from '@/components/RoundButton';
@@ -137,10 +137,7 @@ export default function Restore() {
 
                 <View style={{justifyContent: 'flex-end' }}>
                     <Text style={styles.secondInstructionText}>
-                        1. Open Happy on your mobile device{'\n'}
-                        2. Go to Settings → Account{'\n'}
-                        3. Tap "Link New Device"{'\n'}
-                        4. Scan this QR code
+                        {t('restore.linkDeviceSteps')}
                     </Text>
                 </View>
                 {!authReady && (
@@ -150,14 +147,14 @@ export default function Restore() {
                 )}
                 {authReady && (
                     <QRCode
-                        data={'happy:///account?' + encodeBase64(keypair.publicKey, 'base64url')}
+                        data={'hellovibe:///account?' + encodeBase64(keypair.publicKey, 'base64url')}
                         size={300}
                         foregroundColor={'black'}
                         backgroundColor={'white'}
                     />
                 )}
                 <View style={{ flexGrow: 4, paddingTop: 30 }}>
-                    <RoundButton title="Restore with Secret Key Instead" display='inverted' onPress={() => {
+                    <RoundButton title={t('restore.restoreWithSecretKeyInstead')} display='inverted' onPress={() => {
                         router.push('/restore/manual');
                     }} />
                 </View>

@@ -149,14 +149,12 @@ function HeaderRightNotAuth() {
 
 function HeaderLeft() {
     const styles = stylesheet;
-    const { theme } = useUnistyles();
     return (
         <View style={styles.logoContainer}>
             <Image
-                source={require('@/assets/images/logo-black.png')}
+                source={require('@/assets/images/icon.png')}
                 contentFit="contain"
                 style={[{ width: 24, height: 24 }]}
-                tintColor={theme.colors.header.tint}
             />
         </View>
     );

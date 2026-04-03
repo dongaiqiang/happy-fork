@@ -125,8 +125,8 @@ async function handleAuthLogout(): Promise<void> {
     return;
   }
 
-  console.log(chalk.blue('This will log you out of Happy'));
-  console.log(chalk.yellow('⚠️  You will need to re-authenticate to use Happy again'));
+  console.log(chalk.blue('This will log you out of HelloVibe'));
+  console.log(chalk.yellow('⚠️  You will need to re-authenticate to use HelloVibe again'));
 
   // Ask for confirmation
   const rl = createInterface({

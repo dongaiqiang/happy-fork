@@ -202,6 +202,7 @@ interface ActiveSessionsGroupProps {
 export function ActiveSessionsGroup({ sessions, selectedSessionId }: ActiveSessionsGroupProps) {
     const styles = stylesheet;
     const machines = useAllMachines();
+    const unknownMachineText = t('machine.unknownMachine');
     const machinesMap = React.useMemo(() => {
         const map: Record<string, Machine> = {};
         machines.forEach(machine => {
@@ -224,13 +225,13 @@ export function ActiveSessionsGroup({ sessions, selectedSessionId }: ActiveSessi
 
         sessions.forEach(session => {
             const projectPath = session.metadata?.path || '';
-            const machineId = session.metadata?.machineId || 'unknown';
+            const machineId = session.metadata?.machineId || unknownMachineText;
 
             // Get machine info
-            const machine = machineId !== 'unknown' ? machinesMap[machineId] : null;
+            const machine = machineId !== unknownMachineText ? machinesMap[machineId] : null;
             const machineName = machine?.metadata?.displayName ||
                 machine?.metadata?.host ||
-                (machineId !== 'unknown' ? machineId : '<unknown>');
+                machineId;
 
             // Get or create project group
             let projectGroup = groups.get(projectPath);
@@ -267,7 +268,7 @@ export function ActiveSessionsGroup({ sessions, selectedSessionId }: ActiveSessi
         });
 
         return groups;
-    }, [sessions, machinesMap]);
+    }, [sessions, machinesMap, unknownMachineText]);
 
     // Sort project groups by display path
     const sortedProjectGroups = React.useMemo(() => {
@@ -283,7 +284,7 @@ export function ActiveSessionsGroup({ sessions, selectedSessionId }: ActiveSessi
                 const firstMachine = Array.from(projectGroup.machines.values())[0];
                 const machineName = projectGroup.machines.size === 1
                     ? firstMachine?.machineName
-                    : `${projectGroup.machines.size} machines`;
+                    : t('machine.multipleMachines', { count: projectGroup.machines.size });
 
                 return (
                     <View key={projectPath}>

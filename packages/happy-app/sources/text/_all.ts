@@ -6,13 +6,13 @@
  * 1. Add the language code to the SupportedLanguage type
  * 2. Add the language metadata to SUPPORTED_LANGUAGES
  * 3. Create a new translation file in translations/[code].ts
- * 4. Import and add the translation to the translations object in index.ts
+ * 4. Re-add the language to the translations object in index.ts
  */
 
 /**
  * Supported language codes
  */
-export type SupportedLanguage = 'en' | 'ru' | 'pl' | 'es' | 'it' | 'pt' | 'ca' | 'zh-Hans' | 'zh-Hant' | 'ja';
+export type SupportedLanguage = 'en' | 'zh-Hans' | 'zh-Hant';
 
 /**
  * Language metadata interface
@@ -32,50 +32,15 @@ export const SUPPORTED_LANGUAGES: Record<SupportedLanguage, LanguageInfo> = {
         nativeName: 'English',
         englishName: 'English'
     },
-    ru: {
-        code: 'ru',
-        nativeName: 'Русский',
-        englishName: 'Russian'
-    },
-    pl: {
-        code: 'pl',
-        nativeName: 'Polski',
-        englishName: 'Polish'
-    },
-    es: {
-        code: 'es',
-        nativeName: 'Español',
-        englishName: 'Spanish'
-    },
-    it: {
-        code: 'it',
-        nativeName: 'Italiano',
-        englishName: 'Italian'
-    },
-    pt: {
-        code: 'pt',
-        nativeName: 'Português',
-        englishName: 'Portuguese'
-    },
-    ca: {
-        code: 'ca',
-        nativeName: 'Català',
-        englishName: 'Catalan'
-    },
     'zh-Hans': {
         code: 'zh-Hans',
         nativeName: '中文(简体)',
         englishName: 'Chinese (Simplified)'
     },
-'zh-Hant': {
+    'zh-Hant': {
         code: 'zh-Hant',
         nativeName: '中文(繁體)',
         englishName: 'Chinese (Traditional)'
-    },
-    ja: {
-        code: 'ja',
-        nativeName: '日本語',
-        englishName: 'Japanese'
     }
 } as const;
 
@@ -102,3 +67,27 @@ export const SUPPORTED_LANGUAGE_CODES: SupportedLanguage[] = Object.keys(SUPPORT
  * Default language code
  */
 export const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
+
+export function resolveSupportedLanguageFromLocale(locale?: {
+    languageCode?: string | null;
+    languageTag?: string | null;
+    languageScriptCode?: string | null;
+}): SupportedLanguage | null {
+    if (!locale?.languageCode) {
+        return null;
+    }
+
+    if (locale.languageCode === 'zh') {
+        if (locale.languageScriptCode === 'Hant' || locale.languageTag?.includes('Hant')) {
+            return 'zh-Hant';
+        }
+
+        return 'zh-Hans';
+    }
+
+    if (locale.languageCode === 'en') {
+        return 'en';
+    }
+
+    return null;
+}

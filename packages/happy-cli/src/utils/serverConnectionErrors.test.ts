@@ -522,7 +522,7 @@ describe('printOfflineWarning', () => {
 
         // New unified format via connectionState.fail()
         expect(consoleSpy).toHaveBeenCalledWith(
-            expect.stringContaining('⚠️  Happy server unreachable, offline mode with auto-reconnect enabled')
+            expect.stringContaining('⚠️  HelloVibe server unreachable, offline mode with auto-reconnect enabled')
         );
         expect(consoleSpy).toHaveBeenCalledWith(
             expect.stringContaining('Server connection failed')

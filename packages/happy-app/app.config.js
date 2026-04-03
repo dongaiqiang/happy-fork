@@ -1,24 +1,35 @@
 const variant = process.env.APP_ENV || 'development';
 const name = {
-    development: "easycode (dev)",
-    preview: "easycode (preview)",
-    production: "easycode"
+    development: "HelloVibe (dev)",
+    preview: "HelloVibe (preview)",
+    production: "HelloVibe"
 }[variant];
 const bundleId = {
-    development: "com.easycode.app.dev",
-    preview: "com.easycode.app.preview",
-    production: "com.easycode.app"
+    development: "com.hellovibe.app.dev",
+    preview: "com.hellovibe.app.preview",
+    production: "com.hellovibe.app"
 }[variant];
+const slug = "hellovibe";
+const scheme = "hellovibe";
+const universalLinkHost = "app.hellovibe.com";
+const updatesUrl = process.env.EXPO_UPDATES_URL || "https://u.expo.dev/4558dd3d-cd5a-47cd-bad9-e591a241cc06";
+const easProjectId = process.env.EXPO_EAS_PROJECT_ID || "dabee7ae-e79f-44ec-a548-d42d2faf82d0";
+const updatesChannel = {
+    development: "development",
+    preview: "preview",
+    production: "production"
+}[variant];
+const enableStoreDeepLinks = variant === 'production';
 
 export default {
     expo: {
         name,
-        slug: "happy",
+        slug,
         version: "1.6.2",
         runtimeVersion: "20",
         orientation: "default",
         icon: "./sources/assets/images/icon.png",
-        scheme: "happy",
+        scheme,
         userInterfaceStyle: "automatic",
         newArchEnabled: true,
         notification: {
@@ -36,7 +47,7 @@ export default {
                 NSLocalNetworkUsageDescription: "Allow $(PRODUCT_NAME) to find and connect to local devices on your network.",
                 NSBonjourServices: ["_http._tcp", "_https._tcp"]
             },
-            associatedDomains: variant === 'production' ? ["applinks:app.happy.engineering"] : []
+            associatedDomains: enableStoreDeepLinks ? [`applinks:${universalLinkHost}`] : []
         },
         android: {
             adaptiveIcon: {
@@ -56,14 +67,14 @@ export default {
             edgeToEdgeEnabled: true,
             package: bundleId,
             googleServicesFile: "./google-services.json",
-            intentFilters: variant === 'production' ? [
+            intentFilters: enableStoreDeepLinks ? [
                 {
                     "action": "VIEW",
                     "autoVerify": true,
                     "data": [
                         {
                             "scheme": "https",
-                            "host": "app.happy.engineering",
+                            "host": universalLinkHost,
                             "pathPrefix": "/"
                         }
                     ],
@@ -158,9 +169,9 @@ export default {
             ]
         ],
         updates: {
-            url: "https://u.expo.dev/4558dd3d-cd5a-47cd-bad9-e591a241cc06",
+            url: updatesUrl,
             requestHeaders: {
-                "expo-channel-name": "production"
+                "expo-channel-name": updatesChannel
             }
         },
         experiments: {
@@ -171,7 +182,7 @@ export default {
                 root: "./sources/app"
             },
             eas: {
-                projectId: "dabee7ae-e79f-44ec-a548-d42d2faf82d0"
+                projectId: easProjectId
             },
             app: {
                 postHogKey: process.env.EXPO_PUBLIC_POSTHOG_API_KEY,

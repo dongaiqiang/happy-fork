@@ -10,6 +10,9 @@ import { Modal } from '@/modal';
 import { t } from '@/text';
 import { sync } from '@/sync/sync';
 
+const TERMINAL_AUTH_URL_PREFIX = 'hellovibe://terminal?';
+const LEGACY_TERMINAL_AUTH_URL_PREFIX = 'happy://terminal?';
+
 interface UseConnectTerminalOptions {
     onSuccess?: () => void;
     onError?: (error: any) => void;
@@ -21,14 +24,26 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
     const checkScannerPermissions = useCheckScannerPermissions();
 
     const processAuthUrl = React.useCallback(async (url: string) => {
-        if (!url.startsWith('happy://terminal?')) {
+        const matchedPrefix = [TERMINAL_AUTH_URL_PREFIX, LEGACY_TERMINAL_AUTH_URL_PREFIX]
+            .find((prefix) => url.startsWith(prefix));
+
+        if (!matchedPrefix) {
             Modal.alert(t('common.error'), t('modals.invalidAuthUrl'), [{ text: t('common.ok') }]);
+            return false;
+        }
+
+        if (process.env.EXPO_PUBLIC_ENABLE_PLAINTEXT_MODE !== 'true' && !auth.credentials) {
+            Modal.alert(
+                t('common.error'),
+                '当前浏览器还没有登录账号。请先在这个浏览器里创建或恢复账号，然后再重新连接这台 Mac。',
+                [{ text: t('common.ok') }]
+            );
             return false;
         }
         
         setIsLoading(true);
         try {
-            const tail = url.slice('happy://terminal?'.length);
+            const tail = url.slice(matchedPrefix.length);
             const publicKey = decodeBase64(tail, 'base64url');
             
             // --- PLAINTEXT MODE BYPASS ---
@@ -98,7 +113,7 @@ export function useConnectTerminal(options?: UseConnectTerminalOptions) {
     React.useEffect(() => {
         if (CameraView.isModernBarcodeScannerAvailable) {
             const subscription = CameraView.onModernBarcodeScanned(async (event) => {
-                if (event.data.startsWith('happy://terminal?')) {
+                if (event.data.startsWith(TERMINAL_AUTH_URL_PREFIX) || event.data.startsWith(LEGACY_TERMINAL_AUTH_URL_PREFIX)) {
                     // Dismiss scanner on Android is called automatically when barcode is scanned
                     if (Platform.OS === 'ios') {
                         await CameraView.dismissScanner();

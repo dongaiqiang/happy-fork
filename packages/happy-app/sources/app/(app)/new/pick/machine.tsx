@@ -89,14 +89,14 @@ export default function MachinePickerScreen() {
                 <Stack.Screen
                     options={{
                         headerShown: true,
-                        headerTitle: 'Select Machine',
+                        headerTitle: t('newSession.machinePicker.title'),
                         headerBackTitle: t('common.back')
                     }}
                 />
                 <View style={styles.container}>
                     <View style={styles.emptyContainer}>
                         <Text style={styles.emptyText}>
-                            No machines available
+                            {t('newSession.machinePicker.noItemsMessage')}
                         </Text>
                     </View>
                 </View>
@@ -109,7 +109,7 @@ export default function MachinePickerScreen() {
             <Stack.Screen
                 options={{
                     headerShown: true,
-                    headerTitle: 'Select Machine',
+                    headerTitle: t('newSession.machinePicker.title'),
                     headerBackTitle: t('common.back')
                 }}
             />
@@ -136,7 +136,7 @@ export default function MachinePickerScreen() {
                         getItemStatus: (machine) => {
                             const offline = !isMachineOnline(machine);
                             return {
-                                text: offline ? 'offline' : 'online',
+                                text: offline ? t('status.offline') : t('status.online'),
                                 color: offline ? theme.colors.status.disconnected : theme.colors.status.connected,
                                 dotColor: offline ? theme.colors.status.disconnected : theme.colors.status.connected,
                                 isPulsing: !offline,
@@ -154,10 +154,11 @@ export default function MachinePickerScreen() {
                             const search = searchText.toLowerCase();
                             return displayName.includes(search) || host.includes(search);
                         },
-                        searchPlaceholder: "Type to filter machines...",
-                        recentSectionTitle: "Recent Machines",
-                        favoritesSectionTitle: "Favorite Machines",
-                        noItemsMessage: "No machines available",
+                        searchPlaceholder: t('newSession.machinePicker.searchPlaceholder'),
+                        recentSectionTitle: t('newSession.machinePicker.recentSectionTitle'),
+                        favoritesSectionTitle: t('newSession.machinePicker.favoritesSectionTitle'),
+                        allItemsSectionTitle: t('newSession.machinePicker.allSectionTitle'),
+                        noItemsMessage: t('newSession.machinePicker.noItemsMessage'),
                         showFavorites: false,  // Simpler modal experience - no favorites in modal
                         showRecent: true,
                         showSearch: true,

@@ -33,13 +33,13 @@ export async function authLogin(config: Config): Promise<void> {
     }
 
     // 3. Generate and display QR code
-    const qrData = `happy:///account?${encodeBase64Url(keypair.publicKey)}`;
+    const qrData = `hellovibe:///account?${encodeBase64Url(keypair.publicKey)}`;
     console.log('');
     qrcode.generate(qrData, { small: true }, (code: string) => {
         console.log(code);
     });
     console.log('## Authentication');
-    console.log('- Action: Scan this QR code with the Happy app');
+    console.log('- Action: Scan this QR code with the HelloVibe app');
     console.log('- Path: Settings -> Account -> Link New Device');
     console.log('');
 

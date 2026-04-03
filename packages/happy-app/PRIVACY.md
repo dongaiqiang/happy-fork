@@ -1,103 +1,100 @@
-# Privacy Policy for Happy Coder
+# Privacy Policy for HelloVibe
 
-**Last Updated: January 2025**
+**Last Updated: April 2026**
 
 ## Overview
 
-Happy Coder is committed to protecting your privacy. This policy explains how we handle your data with our zero-knowledge encryption architecture.
+HelloVibe is designed to help you start and continue AI coding work across devices and environments while keeping sensitive content private. This policy explains what data we process, what stays encrypted, and where third-party services are involved.
 
 ## What We Collect
 
 ### Encrypted Data
-- **Messages and Code**: All your Claude Code conversations and code snippets are end-to-end encrypted on your device before transmission. We store this encrypted data but have no ability to decrypt or read it.
-- **Encryption Keys**: When you pair devices, encryption keys are transmitted between your devices in encrypted form. We cannot access or decrypt these keys.
+- **Messages and Code**: Your AI coding conversations, code snippets, and similar content are encrypted on your device before transmission. We may store encrypted payloads for synchronization, but we do not have the keys needed to read them.
+- **Encryption Keys**: When you pair devices, keys are exchanged in encrypted form between your devices. We do not have access to the plaintext keys.
 
 ### Metadata (Not Encrypted)
 - **Message IDs**: Unique identifiers for message ordering and synchronization
 - **Timestamps**: When messages were created and synced
 - **Device IDs**: Anonymous identifiers for device pairing
-- **Session IDs**: Identifiers for your Claude Code terminal sessions
-- **Push Notification Tokens**: Device tokens for sending push notifications via Expo's push notification service
+- **Session IDs**: Identifiers for your AI coding terminal sessions
+- **Push Notification Tokens**: Device tokens used to route push notifications through Expo's push notification service
 
 ### Analytics (PostHog)
-- **Anonymous Events**: We collect basic app usage events through PostHog to improve the app experience
-- **Privacy by Design**: All analytics events use an anonymized ID derived from a secret key - we cannot match this back to any user or account
-- **No Content Tracking**: We only track basic app usage events, never any message content, code, or personal information
+- **Anonymous Events**: We collect limited product usage events through PostHog to understand app reliability and improve the experience
+- **Pseudonymous IDs**: Analytics events use a derived identifier rather than your encrypted content
+- **No Content Tracking**: We do not send message content, code, or encrypted payloads to analytics
 - **Opt-Out Available**: You can disable analytics collection at any time in the app settings
 
 ### Subscription Management (Revenue Cat)
-- **Account ID**: Revenue Cat uses your account ID to manage subscriptions and enable premium features
-- **Backend Integration**: This ID allows us to provide additional features from our backend while maintaining end-to-end encryption for your content
-- **Data Separation**: Purchase analytics sent to PostHog use the anonymized ID instead - we cannot match Revenue Cat data with PostHog analytics
+- **Account ID**: RevenueCat may process an app-specific account identifier to manage purchases or premium entitlements when those features are enabled
+- **Purchase Status**: RevenueCat may receive platform transaction metadata needed to validate purchases
+- **No Payment Card Storage by Us**: We do not receive or store your payment card information
 
 ## What We Don't Collect
-- Your actual code or conversation content (we can't decrypt it)
-- Personal information beyond what you voluntarily include in encrypted messages
-- Device information beyond anonymous IDs
-- Location data
+- Plaintext code or plaintext conversation content from encrypted session traffic
+- Personal information beyond what you explicitly provide through the app or connected services
+- Precise location data
+- Your payment card details
 
 ## How We Use Data
 
 ### Encrypted Data
 - Stored on our servers solely for synchronization between your devices
 - Transmitted to your paired devices when requested
-- Retained until you delete it through the app
+- Retained only as needed for synchronization and continuity features
 
 ### Metadata
 - Message IDs and timestamps are used to maintain proper message ordering
 - Device IDs enable secure pairing between your devices
-- Session IDs track your Claude Code terminal sessions for synchronization
+- Session IDs track your AI coding terminal sessions for synchronization
 - Push notification tokens are stored to enable notifications through Expo's service
 
 ### Push Notifications
-Push notifications are sent directly from your devices to each other, not from our backend. This means:
-- We never see the content of your notifications
-- Notification content is generated on your device
-- Only device-to-device communication occurs for notification content
-- We use Expo's push notification service solely as a delivery mechanism
+Push notifications are used to help you keep work moving across devices. We use Expo's push notification infrastructure as a delivery mechanism, but notification content is designed to avoid exposing unnecessary sensitive information.
 
 ## Data Security
 
-- **End-to-End Encryption**: Using TweetNaCl (same as Signal) for all sensitive data
-- **Zero-Knowledge**: We cannot decrypt your data even if compelled
-- **Secure Key Exchange**: Encryption keys are transmitted between your devices only in encrypted form that we cannot access
-- **Open Source**: Our encryption implementation is publicly auditable
-- **No Backdoors**: The architecture makes it impossible for us to access your content
+- **End-to-End Encryption**: Sensitive session content is encrypted before transmission
+- **Zero-Knowledge Design**: We are not intended to have access to your plaintext session content
+- **Secure Key Exchange**: Encryption keys are exchanged between your devices in encrypted form
+- **Open Source**: Core implementation details are available in the source repository
 
 ## Data Retention
 
-- Encrypted messages are retained indefinitely until you delete them
-- Metadata is retained for system functionality
-- Deleted data is permanently removed from our servers within 30 days
+- Encrypted content and related metadata may be retained while needed for synchronization, recovery, and service operation
+- Some operational records may be kept longer where required for security, fraud prevention, or legal compliance
+- Retention periods may change as HelloVibe evolves, and material updates will be reflected in this policy
 
-## Your Rights
+## Your Choices
 
-You have the right to:
-- Delete all your data through the app
-- Export your encrypted data
-- Audit our open-source code
-- Use the app without providing any personal information
+- You can disable analytics collection in the app settings
+- You can review the open-source codebase to understand how encrypted data flows through the app
+- You can contact support with privacy-related questions or requests
+- You can stop using the service at any time
 
-## Data Sharing
+## Third-Party Processors
 
-We do not share your data with anyone. Period.
+We use a limited set of service providers to operate HelloVibe. Depending on the feature you use, this can include:
+
+- **Expo** for push notification delivery and app infrastructure
+- **PostHog** for product analytics
+- **RevenueCat** for purchase and entitlement management
+
+These providers process only the data needed for their role, under their own service terms and privacy commitments.
 
 ## Changes to This Policy
 
-We will notify users of any material changes to this privacy policy through the app. Continued use of the service after changes constitutes acceptance.
+We may update this policy as HelloVibe evolves. If we make material changes, we will update the policy date and may provide additional notice through the app or our public channels.
 
 ## Contact
 
 For privacy concerns or questions:
-- GitHub Issues: https://github.com/slopus/happy-coder/issues
+- Support: https://app.hellovibe.com/support
 
 ## Compliance
 
-Happy Coder is designed with privacy by default and complies with:
-- GDPR (General Data Protection Regulation)
-- CCPA (California Consumer Privacy Act)
-- Privacy by Design principles
+HelloVibe is designed with privacy-by-default principles in mind. We review our data practices against applicable privacy requirements as the product evolves.
 
 ---
 
-**Remember**: Your encryption keys are only shared between your own devices in encrypted form. We cannot read your code or conversations even if we wanted to.
+**Remember**: HelloVibe is built so that sensitive session content is encrypted before transmission, helping keep your code and conversations private across devices.

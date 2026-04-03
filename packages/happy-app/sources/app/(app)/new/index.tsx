@@ -587,16 +587,25 @@ function NewSessionWizard() {
         }
     }, [selectedMachineId, dismissedCLIWarnings, setDismissedCLIWarnings]);
 
+    const getAgentDisplayName = React.useCallback((value: 'claude' | 'codex' | 'gemini') => {
+        switch (value) {
+            case 'claude':
+                return t('agentInput.agent.claude');
+            case 'codex':
+                return t('agentInput.agent.codex');
+            case 'gemini':
+                return t('agentInput.agent.gemini');
+        }
+    }, []);
+
     // Helper to check if profile is available (compatible + CLI detected)
     const isProfileAvailable = React.useCallback((profile: AIBackendProfile): { available: boolean; reason?: string } => {
         // Check profile compatibility with selected agent type
         if (!validateProfileForAgent(profile, agentType)) {
-            // Build list of agents this profile supports (excluding current)
-            // Uses Object.entries to iterate over compatibility flags - scales automatically with new agents
             const supportedAgents = (Object.entries(profile.compatibility) as [string, boolean][])
                 .filter(([agent, supported]) => supported && agent !== agentType)
-                .map(([agent]) => agent.charAt(0).toUpperCase() + agent.slice(1)); // 'claude' -> 'Claude'
-            const required = supportedAgents.join(' or ') || 'another agent';
+                .map(([agent]) => agent as 'claude' | 'codex' | 'gemini');
+            const required = supportedAgents.join(',') || 'claude';
             return {
                 available: false,
                 reason: `requires-agent:${required}`,
@@ -853,7 +862,7 @@ function NewSessionWizard() {
         const duplicatedProfile: AIBackendProfile = {
             ...profile,
             id: randomUUID(),
-            name: `${profile.name} (Copy)`,
+            name: `${profile.name} (${t('newSession.profileSection.copySuffix')})`,
             isBuiltIn: false,
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -867,29 +876,35 @@ function NewSessionWizard() {
         const parts: string[] = [];
         const availability = isProfileAvailable(profile);
 
-        // Add "Built-in" indicator first for built-in profiles
         if (profile.isBuiltIn) {
-            parts.push('Built-in');
+            parts.push(t('newSession.profileSection.builtIn'));
         }
 
-        // Add CLI type second (before warnings/availability)
-        if (profile.compatibility.claude && profile.compatibility.codex) {
-            parts.push('Claude & Codex CLI');
-        } else if (profile.compatibility.claude) {
-            parts.push('Claude CLI');
-        } else if (profile.compatibility.codex) {
-            parts.push('Codex CLI');
+        const supportedAgents = (Object.entries(profile.compatibility) as [string, boolean][])
+            .filter(([, supported]) => supported)
+            .map(([agent]) => agent as 'claude' | 'codex' | 'gemini');
+        if (supportedAgents.length > 0) {
+            parts.push(
+                t('newSession.profileSection.cliLabel', {
+                    agents: supportedAgents.map(getAgentDisplayName).join(' / '),
+                })
+            );
         }
 
-        // Add availability warning if unavailable
         if (!availability.available && availability.reason) {
             if (availability.reason.startsWith('requires-agent:')) {
-                const required = availability.reason.split(':')[1];
-                parts.push(`⚠️ This profile uses ${required} CLI only`);
+                const required = availability.reason
+                    .split(':')[1]
+                    ?.split(',')
+                    .filter(Boolean)
+                    .map((agent) => getAgentDisplayName(agent as 'claude' | 'codex' | 'gemini'))
+                    .join(' / ');
+                if (required) {
+                    parts.push(t('newSession.profileSection.requiresAgentOnly', { agent: required }));
+                }
             } else if (availability.reason.startsWith('cli-not-detected:')) {
-                const cli = availability.reason.split(':')[1];
-                const cliName = cli === 'claude' ? 'Claude' : 'Codex';
-                parts.push(`⚠️ ${cliName} CLI not detected (this profile needs it)`);
+                const cli = availability.reason.split(':')[1] as 'claude' | 'codex' | 'gemini';
+                parts.push(t('newSession.profileSection.cliNotDetected', { agent: getAgentDisplayName(cli) }));
             }
         }
 
@@ -942,7 +957,7 @@ function NewSessionWizard() {
         }
 
         return parts.join(', ');
-    }, [agentType, isProfileAvailable, daemonEnv]);
+    }, [isProfileAvailable, daemonEnv, getAgentDisplayName]);
 
     const handleDeleteProfile = React.useCallback((profile: AIBackendProfile) => {
         Modal.alert(
@@ -1057,7 +1072,7 @@ function NewSessionWizard() {
                     if (worktreeResult.error === 'Not a Git repository') {
                         Modal.alert(t('common.error'), t('newSession.worktree.notGitRepo'));
                     } else {
-                        Modal.alert(t('common.error'), t('newSession.worktree.failed', { error: worktreeResult.error || 'Unknown error' }));
+                        Modal.alert(t('common.error'), t('newSession.worktree.failed', { error: worktreeResult.error || t('errors.unknownError') }));
                     }
                     setIsCreating(false);
                     return;
@@ -1124,7 +1139,7 @@ function NewSessionWizard() {
             }
 
             if (!sessionId) {
-                throw new Error('Session spawning failed - no session ID returned.');
+                throw new Error(t('newSession.sessionSpawningFailed'));
             }
 
             clearNewSessionDraft();
@@ -1147,12 +1162,12 @@ function NewSessionWizard() {
             });
         } catch (error) {
             console.error('Failed to start session', error);
-            let errorMessage = 'Failed to start session. Make sure the daemon is running on the target machine.';
+            let errorMessage = t('newSession.failedToStart');
             if (error instanceof Error) {
                 if (error.message.includes('timeout')) {
-                    errorMessage = 'Session startup timed out. The machine may be slow or the daemon may not be responding.';
+                    errorMessage = t('newSession.sessionTimeout');
                 } else if (error.message.includes('Socket not connected')) {
-                    errorMessage = 'Not connected to server. Check your internet connection.';
+                    errorMessage = t('newSession.notConnectedToServer');
                 } else if (error.message.trim()) {
                     errorMessage = error.message;
                 }
@@ -1173,7 +1188,7 @@ function NewSessionWizard() {
         const includeCLI = selectedMachineId && cliAvailability.timestamp > 0;
 
         return {
-            text: isOnline ? 'online' : 'offline',
+            text: isOnline ? t('status.online') : t('status.offline'),
             color: isOnline ? theme.colors.success : theme.colors.textDestructive,
             dotColor: isOnline ? theme.colors.success : theme.colors.textDestructive,
             isPulsing: isOnline,
@@ -1243,7 +1258,7 @@ function NewSessionWizard() {
                                 onSend={handleCreateSession}
                                 isSendDisabled={!canCreate}
                                 isSending={isCreating}
-                                placeholder="What would you like to work on?"
+                                placeholder={t('newSession.promptPlaceholder')}
                                 autocompletePrefixes={[]}
                                 autocompleteSuggestions={async () => []}
                                 agentType={agentType}
@@ -1306,7 +1321,7 @@ function NewSessionWizard() {
                                     <Ionicons name="desktop-outline" size={16} color={theme.colors.textSecondary} />
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: STATUS_ITEM_GAP, flexWrap: 'wrap' }}>
                                         <Text style={{ fontSize: 11, color: theme.colors.textSecondary, ...Typography.default() }}>
-                                            {selectedMachine.metadata?.displayName || selectedMachine.metadata?.host || 'Machine'}:
+                                            {selectedMachine.metadata?.displayName || selectedMachine.metadata?.host || t('machine.machineGroup')}:
                                         </Text>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                             <StatusDot
@@ -1323,7 +1338,7 @@ function NewSessionWizard() {
                                                 {cliAvailability.claude ? '✓' : '✗'}
                                             </Text>
                                             <Text style={{ fontSize: 11, color: cliAvailability.claude ? theme.colors.success : theme.colors.textDestructive, ...Typography.default() }}>
-                                                claude
+                                                {getAgentDisplayName('claude')}
                                             </Text>
                                         </View>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -1331,7 +1346,7 @@ function NewSessionWizard() {
                                                 {cliAvailability.codex ? '✓' : '✗'}
                                             </Text>
                                             <Text style={{ fontSize: 11, color: cliAvailability.codex ? theme.colors.success : theme.colors.textDestructive, ...Typography.default() }}>
-                                                codex
+                                                {getAgentDisplayName('codex')}
                                             </Text>
                                         </View>
                                         {experimentsEnabled && (
@@ -1340,7 +1355,7 @@ function NewSessionWizard() {
                                                     {cliAvailability.gemini ? '✓' : '✗'}
                                                 </Text>
                                                 <Text style={{ fontSize: 11, color: cliAvailability.gemini ? theme.colors.success : theme.colors.textDestructive, ...Typography.default() }}>
-                                                    gemini
+                                                    {getAgentDisplayName('gemini')}
                                                 </Text>
                                             </View>
                                         )}
@@ -1352,10 +1367,10 @@ function NewSessionWizard() {
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, marginTop: 12 }}>
                                 <Text style={[styles.sectionHeader, { marginBottom: 0, marginTop: 0 }]}>1.</Text>
                                 <Ionicons name="person-outline" size={18} color={theme.colors.text} />
-                                <Text style={[styles.sectionHeader, { marginBottom: 0, marginTop: 0 }]}>Choose AI Profile</Text>
+                                <Text style={[styles.sectionHeader, { marginBottom: 0, marginTop: 0 }]}>{t('newSession.profileSection.title')}</Text>
                             </View>
                             <Text style={styles.sectionDescription}>
-                                Choose which AI backend runs your session (Claude or Codex). Create custom profiles for alternative APIs.
+                                {t('newSession.profileSection.description')}
                             </Text>
 
                             {/* Missing CLI Installation Banners */}
@@ -1372,11 +1387,11 @@ function NewSessionWizard() {
                                         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginRight: 16 }}>
                                             <Ionicons name="warning" size={16} color={theme.colors.warning} />
                                             <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.text, ...Typography.default('semiBold') }}>
-                                                Claude CLI Not Detected
+                                                {t('newSession.profileSection.claudeCliNotDetected')}
                                             </Text>
                                             <View style={{ flex: 1, minWidth: 20 }} />
                                             <Text style={{ fontSize: 10, color: theme.colors.textSecondary, ...Typography.default() }}>
-                                                Don't show this popup for
+                                                {t('newSession.profileSection.warningHideFor')}
                                             </Text>
                                             <Pressable
                                                 onPress={() => handleCLIBannerDismiss('claude', 'machine')}
@@ -1389,7 +1404,7 @@ function NewSessionWizard() {
                                                 }}
                                             >
                                                 <Text style={{ fontSize: 10, color: theme.colors.textSecondary, ...Typography.default() }}>
-                                                    this machine
+                                                    {t('newSession.profileSection.dismissThisMachine')}
                                                 </Text>
                                             </Pressable>
                                             <Pressable
@@ -1403,7 +1418,7 @@ function NewSessionWizard() {
                                                 }}
                                             >
                                                 <Text style={{ fontSize: 10, color: theme.colors.textSecondary, ...Typography.default() }}>
-                                                    any machine
+                                                    {t('newSession.profileSection.dismissAnyMachine')}
                                                 </Text>
                                             </Pressable>
                                         </View>
@@ -1416,7 +1431,7 @@ function NewSessionWizard() {
                                     </View>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
                                         <Text style={{ fontSize: 11, color: theme.colors.textSecondary, ...Typography.default() }}>
-                                            Install: npm install -g @anthropic-ai/claude-code •
+                                            {t('newSession.profileSection.claudeInstallCommand')} •
                                         </Text>
                                         <Pressable onPress={() => {
                                             if (Platform.OS === 'web') {
@@ -1424,7 +1439,7 @@ function NewSessionWizard() {
                                             }
                                         }}>
                                             <Text style={{ fontSize: 11, color: theme.colors.textLink, ...Typography.default() }}>
-                                                View Installation Guide →
+                                                {t('newSession.profileSection.installationGuide')}
                                             </Text>
                                         </Pressable>
                                     </View>
@@ -1444,11 +1459,11 @@ function NewSessionWizard() {
                                         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginRight: 16 }}>
                                             <Ionicons name="warning" size={16} color={theme.colors.warning} />
                                             <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.text, ...Typography.default('semiBold') }}>
-                                                Codex CLI Not Detected
+                                                {t('newSession.profileSection.codexCliNotDetected')}
                                             </Text>
                                             <View style={{ flex: 1, minWidth: 20 }} />
                                             <Text style={{ fontSize: 10, color: theme.colors.textSecondary, ...Typography.default() }}>
-                                                Don't show this popup for
+                                                {t('newSession.profileSection.warningHideFor')}
                                             </Text>
                                             <Pressable
                                                 onPress={() => handleCLIBannerDismiss('codex', 'machine')}
@@ -1461,7 +1476,7 @@ function NewSessionWizard() {
                                                 }}
                                             >
                                                 <Text style={{ fontSize: 10, color: theme.colors.textSecondary, ...Typography.default() }}>
-                                                    this machine
+                                                    {t('newSession.profileSection.dismissThisMachine')}
                                                 </Text>
                                             </Pressable>
                                             <Pressable
@@ -1475,7 +1490,7 @@ function NewSessionWizard() {
                                                 }}
                                             >
                                                 <Text style={{ fontSize: 10, color: theme.colors.textSecondary, ...Typography.default() }}>
-                                                    any machine
+                                                    {t('newSession.profileSection.dismissAnyMachine')}
                                                 </Text>
                                             </Pressable>
                                         </View>
@@ -1488,7 +1503,7 @@ function NewSessionWizard() {
                                     </View>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
                                         <Text style={{ fontSize: 11, color: theme.colors.textSecondary, ...Typography.default() }}>
-                                            Install: npm install -g codex-cli •
+                                            {t('newSession.profileSection.codexInstallCommand')} •
                                         </Text>
                                         <Pressable onPress={() => {
                                             if (Platform.OS === 'web') {
@@ -1496,7 +1511,7 @@ function NewSessionWizard() {
                                             }
                                         }}>
                                             <Text style={{ fontSize: 11, color: theme.colors.textLink, ...Typography.default() }}>
-                                                View Installation Guide →
+                                                {t('newSession.profileSection.installationGuide')}
                                             </Text>
                                         </Pressable>
                                     </View>
@@ -1516,11 +1531,11 @@ function NewSessionWizard() {
                                         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginRight: 16 }}>
                                             <Ionicons name="warning" size={16} color={theme.colors.warning} />
                                             <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.text, ...Typography.default('semiBold') }}>
-                                                Gemini CLI Not Detected
+                                                {t('newSession.profileSection.geminiCliNotDetected')}
                                             </Text>
                                             <View style={{ flex: 1, minWidth: 20 }} />
                                             <Text style={{ fontSize: 10, color: theme.colors.textSecondary, ...Typography.default() }}>
-                                                Don't show this popup for
+                                                {t('newSession.profileSection.warningHideFor')}
                                             </Text>
                                             <Pressable
                                                 onPress={() => handleCLIBannerDismiss('gemini', 'machine')}
@@ -1533,7 +1548,7 @@ function NewSessionWizard() {
                                                 }}
                                             >
                                                 <Text style={{ fontSize: 10, color: theme.colors.textSecondary, ...Typography.default() }}>
-                                                    this machine
+                                                    {t('newSession.profileSection.dismissThisMachine')}
                                                 </Text>
                                             </Pressable>
                                             <Pressable
@@ -1547,7 +1562,7 @@ function NewSessionWizard() {
                                                 }}
                                             >
                                                 <Text style={{ fontSize: 10, color: theme.colors.textSecondary, ...Typography.default() }}>
-                                                    any machine
+                                                    {t('newSession.profileSection.dismissAnyMachine')}
                                                 </Text>
                                             </Pressable>
                                         </View>
@@ -1560,7 +1575,7 @@ function NewSessionWizard() {
                                     </View>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
                                         <Text style={{ fontSize: 11, color: theme.colors.textSecondary, ...Typography.default() }}>
-                                            Install gemini CLI if available •
+                                            {t('newSession.profileSection.geminiInstallCommand')} •
                                         </Text>
                                         <Pressable onPress={() => {
                                             if (Platform.OS === 'web') {
@@ -1568,7 +1583,7 @@ function NewSessionWizard() {
                                             }
                                         }}>
                                             <Text style={{ fontSize: 11, color: theme.colors.textLink, ...Typography.default() }}>
-                                                View Gemini Docs →
+                                                {t('newSession.profileSection.geminiDocs')}
                                             </Text>
                                         </Pressable>
                                     </View>
@@ -1694,7 +1709,7 @@ function NewSessionWizard() {
                                 >
                                     <Ionicons name="add-circle-outline" size={20} color={theme.colors.button.secondary.tint} />
                                     <Text style={styles.addProfileButtonText}>
-                                        Add
+                                        {t('newSession.profileSection.addButton')}
                                     </Text>
                                 </Pressable>
                                 <Pressable
@@ -1708,7 +1723,7 @@ function NewSessionWizard() {
                                 >
                                     <Ionicons name="copy-outline" size={20} color={theme.colors.button.secondary.tint} />
                                     <Text style={styles.addProfileButtonText}>
-                                        Duplicate
+                                        {t('newSession.profileSection.duplicateButton')}
                                     </Text>
                                 </Pressable>
                                 <Pressable
@@ -1722,7 +1737,7 @@ function NewSessionWizard() {
                                 >
                                     <Ionicons name="trash-outline" size={20} color={theme.colors.deleteAction} />
                                     <Text style={[styles.addProfileButtonText, { color: theme.colors.deleteAction }]}>
-                                        Delete
+                                        {t('newSession.profileSection.deleteButton')}
                                     </Text>
                                 </Pressable>
                             </View>
@@ -1732,7 +1747,7 @@ function NewSessionWizard() {
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, marginTop: 12 }}>
                                     <Text style={[styles.sectionHeader, { marginBottom: 0, marginTop: 0 }]}>2.</Text>
                                     <Ionicons name="desktop-outline" size={18} color={theme.colors.text} />
-                                    <Text style={[styles.sectionHeader, { marginBottom: 0, marginTop: 0 }]}>Select Machine</Text>
+                                    <Text style={[styles.sectionHeader, { marginBottom: 0, marginTop: 0 }]}>{t('newSession.machinePicker.title')}</Text>
                                 </View>
                             </View>
 
@@ -1759,7 +1774,7 @@ function NewSessionWizard() {
                                     getItemStatus: (machine) => {
                                         const offline = !isMachineOnline(machine);
                                         return {
-                                            text: offline ? 'offline' : 'online',
+                                            text: offline ? t('status.offline') : t('status.online'),
                                             color: offline ? theme.colors.status.disconnected : theme.colors.status.connected,
                                             dotColor: offline ? theme.colors.status.disconnected : theme.colors.status.connected,
                                             isPulsing: !offline,
@@ -1777,10 +1792,16 @@ function NewSessionWizard() {
                                         const search = searchText.toLowerCase();
                                         return displayName.includes(search) || host.includes(search);
                                     },
-                                    searchPlaceholder: "Type to filter machines...",
-                                    recentSectionTitle: "Recent Machines",
-                                    favoritesSectionTitle: "Favorite Machines",
-                                    noItemsMessage: "No machines available",
+                                    searchPlaceholder: t('newSession.machinePicker.searchPlaceholder'),
+                                    recentSectionTitle: t('newSession.machinePicker.recentSectionTitle'),
+                                    favoritesSectionTitle: t('newSession.machinePicker.favoritesSectionTitle'),
+                                    allItemsSectionTitle: t('newSession.machinePicker.allSectionTitle'),
+                                    noItemsMessage: t('newSession.machinePicker.noItemsMessage'),
+                                    removeFavoriteTitle: t('newSession.machinePicker.removeFavoriteTitle'),
+                                    removeFavoriteMessage: (machine) => t('newSession.machinePicker.removeFavoriteMessage', {
+                                        machine: machine.metadata?.displayName || machine.metadata?.host || machine.id,
+                                    }),
+                                    removeFavoriteConfirmText: t('common.remove'),
                                     showFavorites: true,
                                     showRecent: true,
                                     showSearch: true,
@@ -1812,7 +1833,7 @@ function NewSessionWizard() {
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, marginTop: 12 }}>
                                     <Text style={[styles.sectionHeader, { marginBottom: 0, marginTop: 0 }]}>3.</Text>
                                     <Ionicons name="folder-outline" size={18} color={theme.colors.text} />
-                                    <Text style={[styles.sectionHeader, { marginBottom: 0, marginTop: 0 }]}>Select Working Directory</Text>
+                                    <Text style={[styles.sectionHeader, { marginBottom: 0, marginTop: 0 }]}>{t('newSession.pathPicker.workingDirectoryTitle')}</Text>
                                 </View>
                             </View>
 
@@ -1855,10 +1876,16 @@ function NewSessionWizard() {
                                         const displayPath = formatPathRelativeToHome(path, selectedMachine?.metadata?.homeDir);
                                         return displayPath.toLowerCase().includes(searchText.toLowerCase());
                                     },
-                                    searchPlaceholder: "Type to filter or enter custom directory...",
-                                    recentSectionTitle: "Recent Directories",
-                                    favoritesSectionTitle: "Favorite Directories",
-                                    noItemsMessage: "No recent directories",
+                                    searchPlaceholder: t('newSession.pathPicker.searchPlaceholder'),
+                                    recentSectionTitle: t('newSession.pathPicker.recentDirectoriesTitle'),
+                                    favoritesSectionTitle: t('newSession.pathPicker.favoriteDirectoriesTitle'),
+                                    allItemsSectionTitle: t('newSession.pathPicker.allSectionTitle'),
+                                    noItemsMessage: t('newSession.pathPicker.noRecentDirectories'),
+                                    removeFavoriteTitle: t('newSession.pathPicker.removeFavoriteTitle'),
+                                    removeFavoriteMessage: (path) => t('newSession.pathPicker.removeFavoriteMessage', {
+                                        path: formatPathRelativeToHome(path, selectedMachine?.metadata?.homeDir),
+                                    }),
+                                    removeFavoriteConfirmText: t('common.remove'),
                                     showFavorites: true,
                                     showRecent: true,
                                     showSearch: true,
@@ -1908,7 +1935,7 @@ function NewSessionWizard() {
 
                             {/* Section 4: Permission Mode */}
                             <View ref={permissionSectionRef}>
-                                <Text style={styles.sectionHeader}>4. Permission Mode</Text>
+                                <Text style={styles.sectionHeader}>{`4. ${t('newSession.profileSection.permissionModeTitle')}`}</Text>
                             </View>
                             <ItemGroup title="">
                                 {availableModes.map((option, index, array) => {
@@ -1962,7 +1989,7 @@ function NewSessionWizard() {
                                         style={styles.advancedHeader}
                                         onPress={() => setShowAdvanced(!showAdvanced)}
                                     >
-                                        <Text style={styles.advancedHeaderText}>Advanced Options</Text>
+                                        <Text style={styles.advancedHeaderText}>{t('newSession.profileSection.advancedOptions')}</Text>
                                         <Ionicons
                                             name={showAdvanced ? "chevron-up" : "chevron-down"}
                                             size={20}
@@ -1994,7 +2021,7 @@ function NewSessionWizard() {
                             onSend={handleCreateSession}
                             isSendDisabled={!canCreate}
                             isSending={isCreating}
-                            placeholder="What would you like to work on?"
+                            placeholder={t('newSession.promptPlaceholder')}
                             autocompletePrefixes={[]}
                             autocompleteSuggestions={async () => []}
                             agentType={agentType}

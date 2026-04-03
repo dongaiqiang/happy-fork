@@ -3,6 +3,7 @@ import { View, Text, Pressable, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useUnistyles } from 'react-native-unistyles';
 import { Typography } from '@/constants/Typography';
+import { t } from '@/text';
 import { EnvironmentVariableCard } from './EnvironmentVariableCard';
 import type { ProfileDocumentation } from '@/sync/profileUtils';
 
@@ -109,7 +110,7 @@ export function EnvironmentVariablesList({
                 marginBottom: 12,
                 ...Typography.default('semiBold')
             }}>
-                Environment Variables
+                {t('profiles.environmentVariablesTitle')}
             </Text>
 
             {/* Add Variable Button */}
@@ -133,7 +134,7 @@ export function EnvironmentVariablesList({
                     color: theme.colors.button.primary.tint,
                     ...Typography.default('semiBold')
                 }}>
-                    Add Variable
+                    {t('profiles.addVariable')}
                 </Text>
             </Pressable>
 
@@ -158,7 +159,7 @@ export function EnvironmentVariablesList({
                             borderWidth: 1,
                             borderColor: theme.colors.textSecondary,
                         }}
-                        placeholder="Variable name (e.g., MY_CUSTOM_VAR)"
+                        placeholder={t('profiles.envVarNamePlaceholder')}
                         placeholderTextColor={theme.colors.input.placeholder}
                         value={newVarName}
                         onChangeText={setNewVarName}
@@ -176,7 +177,7 @@ export function EnvironmentVariablesList({
                             borderWidth: 1,
                             borderColor: theme.colors.textSecondary,
                         }}
-                        placeholder="Value (e.g., my-value or ${MY_VAR})"
+                        placeholder={t('profiles.envVarValuePlaceholder')}
                         placeholderTextColor={theme.colors.input.placeholder}
                         value={newVarValue}
                         onChangeText={setNewVarValue}
@@ -205,7 +206,7 @@ export function EnvironmentVariablesList({
                                 color: theme.colors.textSecondary,
                                 ...Typography.default()
                             }}>
-                                Cancel
+                                {t('common.cancel')}
                             </Text>
                         </Pressable>
                         <Pressable
@@ -224,7 +225,7 @@ export function EnvironmentVariablesList({
                                 color: theme.colors.button.primary.tint,
                                 ...Typography.default('semiBold')
                             }}>
-                                Add
+                                {t('common.create')}
                             </Text>
                         </Pressable>
                     </View>

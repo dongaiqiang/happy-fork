@@ -158,6 +158,7 @@ interface ActiveSessionsGroupProps {
 export function ActiveSessionsGroupCompact({ sessions, selectedSessionId }: ActiveSessionsGroupProps) {
     const styles = stylesheet;
     const machines = useAllMachines();
+    const unknownMachineText = t('machine.unknownMachine');
 
     const machinesMap = React.useMemo(() => {
         const map: Record<string, Machine> = {};
@@ -181,14 +182,13 @@ export function ActiveSessionsGroupCompact({ sessions, selectedSessionId }: Acti
 
         sessions.forEach(session => {
             const projectPath = session.metadata?.path || '';
-            const unknownText = t('status.unknown');
-            const machineId = session.metadata?.machineId || unknownText;
+            const machineId = session.metadata?.machineId || unknownMachineText;
 
             // Get machine info
-            const machine = machineId !== unknownText ? machinesMap[machineId] : null;
+            const machine = machineId !== unknownMachineText ? machinesMap[machineId] : null;
             const machineName = machine?.metadata?.displayName ||
                 machine?.metadata?.host ||
-                (machineId !== unknownText ? machineId : `<${unknownText}>`);
+                machineId;
 
             // Get or create project group
             let projectGroup = groups.get(projectPath);
@@ -225,7 +225,7 @@ export function ActiveSessionsGroupCompact({ sessions, selectedSessionId }: Acti
         });
 
         return groups;
-    }, [sessions, machinesMap]);
+    }, [sessions, machinesMap, unknownMachineText]);
 
     // Sort project groups by display path
     const sortedProjectGroups = React.useMemo(() => {

@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import { Text } from '@/components/StyledText';
-import { StyleSheet, useUnistyles } from 'react-native-unistyles';
+import { StyleSheet } from 'react-native-unistyles';
 import { UsageDataPoint } from '@/sync/apiUsage';
+import { t } from '@/text';
 
 interface UsageChartProps {
     data: UsageDataPoint[];
@@ -63,12 +64,10 @@ export const UsageChart: React.FC<UsageChartProps> = ({
     height = 200,
     onBarPress
 }) => {
-    const { theme } = useUnistyles();
-    
     if (!data || data.length === 0) {
         return (
             <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No usage data available</Text>
+                <Text style={styles.emptyText}>{t('usage.noData')}</Text>
             </View>
         );
     }
@@ -91,9 +90,9 @@ export const UsageChart: React.FC<UsageChartProps> = ({
         const isToday = date.toDateString() === now.toDateString();
         
         if (isToday) {
-            return date.toLocaleTimeString('en-US', { hour: 'numeric' });
+            return date.toLocaleTimeString(undefined, { hour: 'numeric' });
         } else {
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         }
     };
     

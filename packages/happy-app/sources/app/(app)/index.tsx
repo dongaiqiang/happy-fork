@@ -6,7 +6,7 @@ import * as React from 'react';
 import { encodeBase64 } from "@/encryption/base64";
 import { authGetToken } from "@/auth/authGetToken";
 import { router, useRouter } from "expo-router";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
 import { getRandomBytesAsync } from "expo-crypto";
 import { useIsLandscape } from "@/utils/responsive";
 import { Typography } from "@/constants/Typography";
@@ -14,9 +14,19 @@ import { trackAccountCreated, trackAccountRestored } from '@/track';
 import { HomeHeaderNotAuth } from "@/components/HomeHeader";
 import { MainView } from "@/components/MainView";
 import { t } from '@/text';
+import { Modal } from '@/modal';
 
 export default function Home() {
     const auth = useAuth();
+    React.useEffect(() => {
+        if (auth.isAuthenticated && Platform.OS === 'web' && typeof window !== 'undefined') {
+            const pendingTerminalConnect = window.sessionStorage.getItem('pending-terminal-connect-key');
+            if (pendingTerminalConnect) {
+                router.replace('/terminal/connect');
+            }
+        }
+    }, [auth.isAuthenticated]);
+
     if (!auth.isAuthenticated) {
         return <NotAuthenticated />;
     }
@@ -30,7 +40,6 @@ function Authenticated() {
 }
 
 function NotAuthenticated() {
-    const { theme } = useUnistyles();
     const auth = useAuth();
     const router = useRouter();
     const isLandscape = useIsLandscape();
@@ -43,16 +52,26 @@ function NotAuthenticated() {
             if (token && secret) {
                 await auth.login(token, encodeBase64(secret, 'base64url'));
                 trackAccountCreated();
+            } else {
+                await Modal.alert(
+                    t('common.error'),
+                    t('welcome.createAccountFailedInvalidResponse')
+                );
             }
         } catch (error) {
             console.error('Error creating account', error);
+            const message = error instanceof Error ? error.message : String(error);
+            await Modal.alert(
+                t('common.error'),
+                t('welcome.createAccountFailedWithReason', { reason: message || t('status.unknown') })
+            );
         }
     }
 
     const portraitLayout = (
         <View style={styles.portraitContainer}>
             <Image
-                source={theme.dark ? require('@/assets/images/logotype-light.png') : require('@/assets/images/logotype-dark.png')}
+                source={require('@/assets/images/icon.png')}
                 resizeMode="contain"
                 style={styles.logo}
             />
@@ -111,7 +130,7 @@ function NotAuthenticated() {
             <View style={styles.landscapeInner}>
                 <View style={styles.landscapeLogoSection}>
                     <Image
-                        source={theme.dark ? require('@/assets/images/logotype-light.png') : require('@/assets/images/logotype-dark.png')}
+                        source={require('@/assets/images/icon.png')}
                         resizeMode="contain"
                         style={styles.logo}
                     />
@@ -184,19 +203,19 @@ const styles = StyleSheet.create((theme) => ({
         justifyContent: 'center',
     },
     logo: {
-        width: 300,
-        height: 90,
+        width: 120,
+        height: 120,
     },
     title: {
-        marginTop: 16,
+        marginTop: 24,
         textAlign: 'center',
-        fontSize: 24,
+        fontSize: 36,
         ...Typography.default('semiBold'),
         color: theme.colors.text,
     },
     subtitle: {
         ...Typography.default(),
-        fontSize: 18,
+        fontSize: 20,
         color: theme.colors.textSecondary,
         marginTop: 16,
         textAlign: 'center',
@@ -241,13 +260,13 @@ const styles = StyleSheet.create((theme) => ({
     },
     landscapeTitle: {
         textAlign: 'center',
-        fontSize: 24,
+        fontSize: 36,
         ...Typography.default('semiBold'),
         color: theme.colors.text,
     },
     landscapeSubtitle: {
         ...Typography.default(),
-        fontSize: 18,
+        fontSize: 20,
         color: theme.colors.textSecondary,
         marginTop: 16,
         textAlign: 'center',

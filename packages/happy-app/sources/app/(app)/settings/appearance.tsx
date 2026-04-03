@@ -10,7 +10,8 @@ import { Switch } from '@/components/Switch';
 import { Appearance } from 'react-native';
 import * as SystemUI from 'expo-system-ui';
 import { darkTheme, lightTheme } from '@/theme';
-import { t, getLanguageNativeName, SUPPORTED_LANGUAGES } from '@/text';
+import { t } from '@/text';
+import { getLanguageNativeName, SUPPORTED_LANGUAGES, resolveSupportedLanguageFromLocale } from '@/text/_all';
 
 // Define known avatar styles for this version of the app
 type KnownAvatarStyle = 'pixelated' | 'gradient' | 'brutalist';
@@ -40,11 +41,11 @@ export default function AppearanceSettingsScreen() {
     // Language display
     const getLanguageDisplayText = () => {
         if (preferredLanguage === null) {
-            const deviceLocale = Localization.getLocales()?.[0]?.languageTag ?? 'en-US';
-            const deviceLanguage = deviceLocale.split('-')[0].toLowerCase();
-            const detectedLanguageName = deviceLanguage in SUPPORTED_LANGUAGES ? 
-                                        getLanguageNativeName(deviceLanguage as keyof typeof SUPPORTED_LANGUAGES) : 
-                                        getLanguageNativeName('en');
+            const deviceLocale = Localization.getLocales()?.[0];
+            const detectedLanguage = resolveSupportedLanguageFromLocale(deviceLocale) ?? 'en';
+            const detectedLanguageName = detectedLanguage in SUPPORTED_LANGUAGES
+                ? getLanguageNativeName(detectedLanguage)
+                : getLanguageNativeName('en');
             return `${t('settingsLanguage.automatic')} (${detectedLanguageName})`;
         } else if (preferredLanguage && preferredLanguage in SUPPORTED_LANGUAGES) {
             return getLanguageNativeName(preferredLanguage as keyof typeof SUPPORTED_LANGUAGES);

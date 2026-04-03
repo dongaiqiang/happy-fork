@@ -1,10 +1,10 @@
 # App Store & Google Play Store Information
 
 ## App Name
-Happy Coder
+HelloVibe
 
 ## Subtitle / Short Description
-Claude Code on the go
+Start your first vibe coding flow.
 
 ## Categories
 - **App Store Primary**: Developer Tools
@@ -12,63 +12,65 @@ Claude Code on the go
 - **Google Play**: Productivity > Developer Tools
 
 ## Keywords
-claude, code, ai, programming, developer, tools, encrypted, secure, coding, assistant, mobile, sync, offline, notifications, privacy
+ai, coding, vibe coding, developer, cli, claude, codex, opencode, mobile, sync, secure, encryption, remote, workflow, terminal
 
 ## App Description / Full Description
 
-Happy Coder is the secure mobile companion for Claude Code that lets you continue your AI coding sessions anywhere (not affiliated with Anthropic). Built by developers who needed to check on Claude's progress during coffee breaks, this app brings the full Claude Code experience to your phone with military-grade encryption.
+HelloVibe helps you start your first vibe coding flow more easily across your phone, computer, and server environments while working with modern CLI-based tools such as Claude Code, Codex, OpenCode, and other compatible workflows.
 
-**Important**: This app requires Claude Code to be installed on your computer. Happy Coder is a companion app that connects to your existing Claude Code setup.
+HelloVibe is designed for developers who want continuity, not lock-in to a single device. Your phone becomes a lightweight way to check progress, follow up, approve actions, and keep work moving while your main coding environment stays where it already runs.
+
+**Important**: HelloVibe works with a compatible connected environment. Depending on your setup, that can be a Mac, a Windows machine, or a remote server where your AI coding workflow is already running.
 
 **Key Features:**
 
-• Continue Claude Code sessions seamlessly between desktop and mobile
-• Push notifications for permission requests and task completion
-• Access conversation history even when your terminal is offline
-• End-to-end encryption - your code stays private
-• Real-time streaming of Claude's responses
-• Zero-knowledge architecture - we can't read your data
+• Start your first vibe coding flow with less setup friction
+• Support workflows built around Claude Code, Codex, OpenCode, and compatible CLI tools
+• Connect to local computers or remote server environments without changing your existing workflow
+• Receive push notifications for permission requests and task completion
+• Review session history even when your terminal is offline
+• Keep sensitive content protected with end-to-end encryption
 
 **How It Works:**
-1. Install the happy-coder CLI on your computer
-2. Scan a QR code to securely pair your devices
-3. Use 'happy' instead of 'claude' to start encrypted sessions
-4. Switch between desktop and mobile instantly
+1. Connect a compatible Mac, Windows, or server environment
+2. Pair your phone securely with the environment where your AI coding tool is running
+3. Start or resume work from the environment you already use
+4. Check progress, respond, and continue from anywhere
 
 Perfect for developers who:
-- Want to monitor long-running tasks on the go
-- Need secure access to proprietary code discussions
-- Value privacy and open-source transparency
-- Work from coffee shops, trains, or anywhere
+- Want to keep AI coding work moving when they step away from the desk
+- Need secure access to private code discussions and outputs
+- Work across local devices and remote server environments
+- Prefer flexible workflows instead of being tied to one machine or one AI tool
 
-Happy Coder uses the same encryption as Signal (TweetNaCl) and is completely open source. Your encryption keys never leave your device, and all data is encrypted before transmission.
+HelloVibe uses the same encryption family as Signal and is open source. Your encryption keys stay on your devices, and sensitive content is encrypted before transmission.
 
-Built by Bay Area engineers who believe the best tools come from scratching your own itch. We needed a way to securely check on our AI coding assistant while away from our desks - so we built it and shared it with the community.
+Built for developers who want a lighter, more continuous way to work with AI coding tools across devices and environments.
 
-Your code. Your privacy. Your Claude Code companion.
+HelloVibe helps you say hello to flow, and stay there longer.
 
 ## Promotional Text
-**App Store (170 chars)**: Securely continue your Claude Code sessions on mobile. End-to-end encrypted, open source, with push notifications for completed tasks. Your AI coding assistant, anywhere.
+**App Store (170 chars)**: Start your first vibe coding flow across phone, computer, and server with secure sync, notifications, and end-to-end encryption.
 
-**Google Play (80 chars)**: Secure mobile Claude Code companion. Encrypted, open source, with notifications.
+**Google Play (80 chars)**: Start your first vibe coding flow securely across devices.
 
 ## What's New (for updates)
 - Initial release
-- End-to-end encryption for all messages
+- End-to-end encryption for sensitive content
 - Push notifications for permissions and task completion
 - Offline access to conversation history
-- Real-time sync with desktop sessions
+- Cross-device continuity for AI coding sessions
 
 ## URLs
 
 ### Privacy Policy
-https://github.com/slopus/happy-coder/blob/main/PRIVACY.md
+https://app.hellovibe.com/privacy
 
 ### Support / Contact
-https://github.com/slopus/happy-coder/issues
+https://app.hellovibe.com/support
 
 ### Website / Marketing
-https://github.com/slopus/happy-coder
+https://app.hellovibe.com
 
 ## Additional Google Play Requirements
 

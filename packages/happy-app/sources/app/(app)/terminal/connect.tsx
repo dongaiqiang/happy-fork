@@ -10,29 +10,36 @@ import { ItemList } from '@/components/ItemList';
 import { ItemGroup } from '@/components/ItemGroup';
 import { Item } from '@/components/Item';
 import { t } from '@/text';
+import { useAuth } from '@/auth/AuthContext';
 
 export default function TerminalConnectScreen() {
     const router = useRouter();
+    const auth = useAuth();
     const [publicKey, setPublicKey] = useState<string | null>(null);
     const [hashProcessed, setHashProcessed] = useState(false);
     const { processAuthUrl, isLoading } = useConnectTerminal({
         onSuccess: () => {
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                window.sessionStorage.removeItem('pending-terminal-connect-key');
+            }
             router.back();
         }
     });
 
-    // Extract key from hash on web platform
     useEffect(() => {
         if (Platform.OS === 'web' && typeof window !== 'undefined' && !hashProcessed) {
             const hash = window.location.hash;
             if (hash.startsWith('#key=')) {
-                const key = hash.substring(5); // Remove '#key='
+                const key = hash.substring(5);
                 setPublicKey(key);
-                
-                // Clear the hash from URL to prevent exposure in browser history
+                window.sessionStorage.setItem('pending-terminal-connect-key', key);
                 window.history.replaceState(null, '', window.location.pathname + window.location.search);
                 setHashProcessed(true);
             } else {
+                const savedKey = window.sessionStorage.getItem('pending-terminal-connect-key');
+                if (savedKey) {
+                    setPublicKey(savedKey);
+                }
                 setHashProcessed(true);
             }
         }
@@ -40,17 +47,18 @@ export default function TerminalConnectScreen() {
 
     const handleConnect = async () => {
         if (publicKey) {
-            // Convert the hash key format to the expected happy:// URL format
-            const authUrl = `happy://terminal?${publicKey}`;
+            const authUrl = `hellovibe://terminal?${publicKey}`;
             await processAuthUrl(authUrl);
         }
     };
 
     const handleReject = () => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.sessionStorage.removeItem('pending-terminal-connect-key');
+        }
         router.back();
     };
 
-    // Show placeholder for mobile platforms
     if (Platform.OS !== 'web') {
         return (
             <ItemList>
@@ -89,7 +97,6 @@ export default function TerminalConnectScreen() {
         );
     }
 
-    // Show loading state while processing hash
     if (!hashProcessed) {
         return (
             <ItemList>
@@ -108,7 +115,6 @@ export default function TerminalConnectScreen() {
         );
     }
 
-    // Show error if no key found
     if (!publicKey) {
         return (
             <ItemList>
@@ -148,10 +154,65 @@ export default function TerminalConnectScreen() {
         );
     }
 
-    // Show confirmation screen for valid connection
+    if (!auth.isAuthenticated) {
+        return (
+            <ItemList>
+                <ItemGroup>
+                    <View style={{
+                        alignItems: 'center',
+                        paddingVertical: 24,
+                        paddingHorizontal: 16
+                    }}>
+                        <Ionicons
+                            name="person-circle-outline"
+                            size={48}
+                            color="#007AFF"
+                            style={{ marginBottom: 16 }}
+                        />
+                        <Text style={{
+                            ...Typography.default('semiBold'),
+                            fontSize: 20,
+                            textAlign: 'center',
+                            marginBottom: 12
+                        }}>
+                            {t('terminal.loginRequiredTitle')}
+                        </Text>
+                        <Text style={{
+                            ...Typography.default(),
+                            fontSize: 14,
+                            color: '#666',
+                            textAlign: 'center',
+                            lineHeight: 20
+                        }}>
+                            {t('terminal.loginRequiredDescription')}
+                        </Text>
+                    </View>
+                </ItemGroup>
+                <ItemGroup>
+                    <View style={{
+                        paddingHorizontal: 16,
+                        paddingVertical: 16,
+                        gap: 12
+                    }}>
+                        <RoundButton
+                            title={t('terminal.loginFirst')}
+                            onPress={() => router.replace('/')}
+                            size="large"
+                        />
+                        <RoundButton
+                            title={t('terminal.reject')}
+                            onPress={handleReject}
+                            size="large"
+                            display="inverted"
+                        />
+                    </View>
+                </ItemGroup>
+            </ItemList>
+        );
+    }
+
     return (
         <ItemList>
-            {/* Connection Request Header */}
             <ItemGroup>
                 <View style={{ 
                     alignItems: 'center',
@@ -184,7 +245,6 @@ export default function TerminalConnectScreen() {
                 </View>
             </ItemGroup>
 
-            {/* Connection Details */}
             <ItemGroup title={t('terminal.connectionDetails')}>
                 <Item
                     title={t('terminal.publicKey')}
@@ -200,7 +260,6 @@ export default function TerminalConnectScreen() {
                 />
             </ItemGroup>
 
-            {/* Action Buttons */}
             <ItemGroup>
                 <View style={{ 
                     paddingHorizontal: 16,
@@ -224,7 +283,6 @@ export default function TerminalConnectScreen() {
                 </View>
             </ItemGroup>
 
-            {/* Security Notice */}
             <ItemGroup 
                 title={t('terminal.security')}
                 footer={t('terminal.securityFooter')}

@@ -6,6 +6,7 @@
   "build": {
     "development": {
       "node": "20.20.0",
+      "environment": "development",
       "autoIncrement": true,
       "developmentClient": true,
       "distribution": "internal",
@@ -16,6 +17,7 @@
     },
     "development-store": {
       "node": "20.20.0",
+      "environment": "development",
       "autoIncrement": true,
       "developmentClient": true,
       "distribution": "store",
@@ -26,6 +28,7 @@
     },
     "preview": {
       "node": "20.20.0",
+      "environment": "preview",
       "autoIncrement": true,
       "distribution": "internal",
       "channel": "preview",
@@ -35,6 +38,7 @@
     },
     "preview-store": {
       "node": "20.20.0",
+      "environment": "preview",
       "autoIncrement": true,
       "distribution": "store",
       "channel": "preview",
@@ -44,6 +48,7 @@
     },
     "production": {
       "node": "20.20.0",
+      "environment": "production",
       "autoIncrement": true,
       "channel": "production",
       "env": {
@@ -53,9 +58,7 @@
   },
   "submit": {
     "production": {
-      "ios": {
-        "ascAppId": "6761045732"
-      }
+      "ios": {}
     }
   }
 }

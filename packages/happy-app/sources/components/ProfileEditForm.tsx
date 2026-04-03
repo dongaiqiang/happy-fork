@@ -29,6 +29,32 @@ export function ProfileEditForm({
     containerStyle
 }: ProfileEditFormProps) {
     const { theme } = useUnistyles();
+    const permissionModeOptions = React.useMemo(() => ([
+        {
+            value: 'default',
+            label: t('profiles.permissionModes.defaultLabel'),
+            description: t('profiles.permissionModes.defaultDescription'),
+            icon: 'shield-outline',
+        },
+        {
+            value: 'acceptEdits',
+            label: t('profiles.permissionModes.acceptEditsLabel'),
+            description: t('profiles.permissionModes.acceptEditsDescription'),
+            icon: 'checkmark-outline',
+        },
+        {
+            value: 'plan',
+            label: t('profiles.permissionModes.planLabel'),
+            description: t('profiles.permissionModes.planDescription'),
+            icon: 'list-outline',
+        },
+        {
+            value: 'bypassPermissions',
+            label: t('profiles.permissionModes.bypassPermissionsLabel'),
+            description: t('profiles.permissionModes.bypassPermissionsDescription'),
+            icon: 'flash-outline',
+        },
+    ]), []);
 
     // Get documentation for built-in profiles
     const profileDocs = React.useMemo(() => {
@@ -146,7 +172,7 @@ export function ProfileEditForm({
                                     color: theme.colors.text,
                                     ...Typography.default('semiBold')
                                 }}>
-                                    Setup Instructions
+                                    {t('profiles.setupInstructions')}
                                 </Text>
                             </View>
 
@@ -193,7 +219,7 @@ export function ProfileEditForm({
                                         flex: 1,
                                         ...Typography.default('semiBold')
                                     }}>
-                                        View Official Setup Guide
+                                        {t('profiles.viewOfficialSetupGuide')}
                                     </Text>
                                     <Ionicons name="open-outline" size={14} color={theme.colors.button.primary.tint} />
                                 </Pressable>
@@ -209,7 +235,7 @@ export function ProfileEditForm({
                         marginBottom: 12,
                         ...Typography.default('semiBold')
                     }}>
-                        Default Session Type
+                        {t('profiles.defaultSessionType')}
                     </Text>
                     <View style={{ marginBottom: 16 }}>
                         <SessionTypeSelector
@@ -226,15 +252,10 @@ export function ProfileEditForm({
                         marginBottom: 12,
                         ...Typography.default('semiBold')
                     }}>
-                        Default Permission Mode
+                        {t('profiles.defaultPermissionMode')}
                     </Text>
                     <ItemGroup title="">
-                        {[
-                            { value: 'default', label: 'Default', description: 'Ask for permissions', icon: 'shield-outline' },
-                            { value: 'acceptEdits', label: 'Accept Edits', description: 'Auto-approve edits', icon: 'checkmark-outline' },
-                            { value: 'plan', label: 'Plan', description: 'Plan before executing', icon: 'list-outline' },
-                            { value: 'bypassPermissions', label: 'Yolo', description: 'Skip all permissions', icon: 'flash-outline' },
-                        ].map((option, index, array) => (
+                        {permissionModeOptions.map((option, index, array) => (
                             <Item
                                 key={option.value}
                                 title={option.label}
@@ -303,7 +324,7 @@ export function ProfileEditForm({
                             color: theme.colors.text,
                             ...Typography.default('semiBold')
                         }}>
-                            Spawn Sessions in Tmux
+                            {t('profiles.spawnSessionsInTmux')}
                         </Text>
                     </View>
                     <Text style={{
@@ -312,7 +333,7 @@ export function ProfileEditForm({
                         marginBottom: 12,
                         ...Typography.default()
                     }}>
-                        {useTmux ? 'Sessions spawn in new tmux windows. Configure session name and temp directory below.' : 'Sessions spawn in regular shell (no tmux integration)'}
+                        {useTmux ? t('profiles.tmuxEnabledDescription') : t('profiles.tmuxDisabledDescription')}
                     </Text>
 
                     {/* Tmux Session Name */}
@@ -323,7 +344,7 @@ export function ProfileEditForm({
                         marginBottom: 8,
                         ...Typography.default('semiBold')
                     }}>
-                        Tmux Session Name ({t('common.optional')})
+                        {`${t('profiles.tmuxSession')} (${t('common.optional')})`}
                     </Text>
                     <Text style={{
                         fontSize: 12,
@@ -331,7 +352,7 @@ export function ProfileEditForm({
                         marginBottom: 8,
                         ...Typography.default()
                     }}>
-                        Leave empty to use first existing tmux session (or create "happy" if none exist). Specify name (e.g., "my-work") for specific session.
+                        {t('profiles.tmuxSessionHelp')}
                     </Text>
                     <TextInput
                         style={{
@@ -345,7 +366,7 @@ export function ProfileEditForm({
                             borderColor: theme.colors.textSecondary,
                             opacity: useTmux ? 1 : 0.5,
                         }}
-                        placeholder={useTmux ? 'Empty = first existing session' : "Disabled - tmux not enabled"}
+                        placeholder={useTmux ? t('profiles.tmuxSessionPlaceholder') : t('profiles.disabledPlaceholder')}
                         value={tmuxSession}
                         onChangeText={setTmuxSession}
                         editable={useTmux}
@@ -359,7 +380,7 @@ export function ProfileEditForm({
                         marginBottom: 8,
                         ...Typography.default('semiBold')
                     }}>
-                        Tmux Temp Directory ({t('common.optional')})
+                        {`${t('profiles.tmuxTempDir')} (${t('common.optional')})`}
                     </Text>
                     <Text style={{
                         fontSize: 12,
@@ -367,7 +388,7 @@ export function ProfileEditForm({
                         marginBottom: 8,
                         ...Typography.default()
                     }}>
-                        Temporary directory for tmux session files. Leave empty for system default.
+                        {t('profiles.tmuxTempDirHelp')}
                     </Text>
                     <TextInput
                         style={{
@@ -381,7 +402,7 @@ export function ProfileEditForm({
                             borderColor: theme.colors.textSecondary,
                             opacity: useTmux ? 1 : 0.5,
                         }}
-                        placeholder={useTmux ? "/tmp (optional)" : "Disabled - tmux not enabled"}
+                        placeholder={useTmux ? t('profiles.tmuxTempDirPlaceholder') : t('profiles.disabledPlaceholder')}
                         placeholderTextColor={theme.colors.input.placeholder}
                         value={tmuxTmpDir}
                         onChangeText={setTmuxTmpDir}
@@ -425,7 +446,7 @@ export function ProfileEditForm({
                                 color: theme.colors.text,
                                 ...Typography.default('semiBold')
                             }}>
-                                Startup Bash Script
+                                {t('profiles.startupBashScript')}
                             </Text>
                         </View>
                         <Text style={{
@@ -435,8 +456,8 @@ export function ProfileEditForm({
                             ...Typography.default()
                         }}>
                             {useStartupScript
-                                ? 'Executed before spawning each session. Use for dynamic setup, environment checks, or custom initialization.'
-                                : 'No startup script - sessions spawn directly'}
+                                ? t('profiles.startupScriptEnabledDescription')
+                                : t('profiles.startupScriptDisabledDescription')}
                         </Text>
                         <View style={{
                             flexDirection: 'row',
@@ -457,7 +478,7 @@ export function ProfileEditForm({
                                     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
                                     minHeight: 100,
                                 }}
-                                placeholder={useStartupScript ? "#!/bin/bash\necho 'Initializing...'\n# Your script here" : "Disabled"}
+                                placeholder={useStartupScript ? t('profiles.startupScriptPlaceholder') : t('profiles.disabledPlaceholder')}
                                 value={startupScript}
                                 onChangeText={setStartupScript}
                                 editable={useStartupScript}

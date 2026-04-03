@@ -184,7 +184,7 @@ export const SettingsView = React.memo(function SettingsView() {
                                 t('modals.authenticateTerminal'),
                                 t('modals.pasteUrlFromTerminal'),
                                 {
-                                    placeholder: 'happy://terminal?...',
+                                    placeholder: 'hellovibe://terminal?...',
                                     confirmText: t('common.authenticate')
                                 }
                             );

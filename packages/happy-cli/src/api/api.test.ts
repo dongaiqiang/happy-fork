@@ -96,7 +96,7 @@ describe('Api server error handling', () => {
 
             expect(result).toBeNull();
             expect(consoleSpy).toHaveBeenCalledWith(
-                expect.stringContaining('⚠️  Happy server unreachable')
+                expect.stringContaining('⚠️  HelloVibe server unreachable')
             );
 
             consoleSpy.mockRestore();
@@ -117,7 +117,7 @@ describe('Api server error handling', () => {
 
             expect(result).toBeNull();
             expect(consoleSpy).toHaveBeenCalledWith(
-                expect.stringContaining('⚠️  Happy server unreachable')
+                expect.stringContaining('⚠️  HelloVibe server unreachable')
             );
 
             consoleSpy.mockRestore();
@@ -138,7 +138,7 @@ describe('Api server error handling', () => {
 
             expect(result).toBeNull();
             expect(consoleSpy).toHaveBeenCalledWith(
-                expect.stringContaining('⚠️  Happy server unreachable')
+                expect.stringContaining('⚠️  HelloVibe server unreachable')
             );
 
             consoleSpy.mockRestore();
@@ -163,7 +163,7 @@ describe('Api server error handling', () => {
             expect(result).toBeNull();
             // New unified format via connectionState.fail()
             expect(consoleSpy).toHaveBeenCalledWith(
-                expect.stringContaining('⚠️  Happy server unreachable')
+                expect.stringContaining('⚠️  HelloVibe server unreachable')
             );
             expect(consoleSpy).toHaveBeenCalledWith(
                 expect.stringContaining('Session creation failed: 404')
@@ -190,7 +190,7 @@ describe('Api server error handling', () => {
 
             expect(result).toBeNull();
             expect(consoleSpy).toHaveBeenCalledWith(
-                expect.stringContaining('⚠️  Happy server unreachable')
+                expect.stringContaining('⚠️  HelloVibe server unreachable')
             );
             consoleSpy.mockRestore();
         });
@@ -213,7 +213,7 @@ describe('Api server error handling', () => {
 
             expect(result).toBeNull();
             expect(consoleSpy).toHaveBeenCalledWith(
-                expect.stringContaining('⚠️  Happy server unreachable')
+                expect.stringContaining('⚠️  HelloVibe server unreachable')
             );
             consoleSpy.mockRestore();
         });
@@ -231,7 +231,7 @@ describe('Api server error handling', () => {
             // Should not show the offline mode message
             const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
             expect(consoleSpy).not.toHaveBeenCalledWith(
-                expect.stringContaining('⚠️  Happy server unreachable')
+                expect.stringContaining('⚠️  HelloVibe server unreachable')
             );
             consoleSpy.mockRestore();
         });
@@ -268,7 +268,7 @@ describe('Api server error handling', () => {
             });
 
             expect(consoleSpy).toHaveBeenCalledWith(
-                expect.stringContaining('⚠️  Happy server unreachable')
+                expect.stringContaining('⚠️  HelloVibe server unreachable')
             );
 
             consoleSpy.mockRestore();
@@ -301,7 +301,7 @@ describe('Api server error handling', () => {
 
             // New unified format via connectionState.fail()
             expect(consoleSpy).toHaveBeenCalledWith(
-                expect.stringContaining('⚠️  Happy server unreachable')
+                expect.stringContaining('⚠️  HelloVibe server unreachable')
             );
             expect(consoleSpy).toHaveBeenCalledWith(
                 expect.stringContaining('Machine registration failed: 404')
