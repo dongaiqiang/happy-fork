@@ -1,14 +1,14 @@
-# Contributing to Happy
+# Contributing to HelloVibe
 
 ## Development Workflow: Build Variants
 
-The Happy app supports three build variants across **iOS, Android, and macOS desktop**, each with separate bundle IDs so all three can be installed simultaneously:
+The HelloVibe app supports three build variants across **iOS, Android, and macOS desktop**, each with separate bundle IDs so all three can be installed simultaneously:
 
 | Variant | Bundle ID | App Name | Use Case |
 |---------|-----------|----------|----------|
-| **Development** | `com.slopus.happy.dev` | Happy (dev) | Local development with hot reload |
-| **Preview** | `com.slopus.happy.preview` | Happy (preview) | Beta testing & OTA updates before production |
-| **Production** | `com.ex3ndr.happy` | Happy | Public App Store release |
+| **Development** | `com.hellovibe.app.dev` | HelloVibe (dev) | Local development with hot reload |
+| **Preview** | `com.hellovibe.app.preview` | HelloVibe (preview) | Beta testing & OTA updates before production |
+| **Production** | `com.hellovibe.app` | HelloVibe | Public App Store release |
 
 **Why Preview?**
 - **Development**: Fast iteration, dev server, instant reload
@@ -258,7 +258,7 @@ If they're all the same name, the variant might not be set correctly. Verify:
 echo $APP_ENV
 
 # Or look at the build output
-npm run ios:dev  # Should show "Happy (dev)" as the name
+npm run ios:dev  # Should show "HelloVibe (dev)" as the name
 ```
 
 ### Connected device not found
@@ -289,9 +289,9 @@ The `app.config.js` file reads the `APP_ENV` environment variable:
 ```javascript
 const variant = process.env.APP_ENV || 'development';
 const bundleId = {
-  development: "com.slopus.happy.dev",
-  preview: "com.slopus.happy.preview",
-  production: "com.ex3ndr.happy"
+  development: "com.hellovibe.app.dev",
+  preview: "com.hellovibe.app.preview",
+  production: "com.hellovibe.app"
 }[variant];
 ```
 
