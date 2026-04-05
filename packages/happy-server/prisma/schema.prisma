@@ -52,6 +52,8 @@ model Account {
     AccessKey           AccessKey[]
     UserFeedItem        UserFeedItem[]
     UserKVStore         UserKVStore[]
+    SubscriptionPlan    SubscriptionPlan?
+    DailyUsage          DailyUsage[]
 }
 
 model TerminalAuthRequest {
@@ -365,4 +367,40 @@ model UserKVStore {
 
     @@unique([accountId, key])
     @@index([accountId])
+}
+
+//
+// Subscription & Quota Management
+//
+
+model SubscriptionPlan {
+    id           String   @id @default(cuid())
+    accountId    String   @unique
+    account      Account  @relation(fields: [accountId], references: [id])
+    tier         String   // "free" | "student" | "pro" | "team" | "enterprise"
+    status       String   // "active" | "cancelled" | "expired"
+    tokensLimit  Int      // 每月 tokens 限额
+    dailyLimit   Int      // 每日 tokens 限额
+    rateLimit    Int      // 每分钟请求数限制
+    storageLimit BigInt   // 存储限额 (bytes)
+    startDate    DateTime @default(now())
+    endDate      DateTime?
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime @updatedAt
+
+    @@index([accountId])
+}
+
+model DailyUsage {
+    id          String   @id @default(cuid())
+    accountId   String
+    account     Account  @relation(fields: [accountId], references: [id])
+    date        String   // 格式："YYYY-MM-DD"
+    tokensUsed  Int      @default(0)
+    requests    Int      @default(0)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    @@unique([accountId, date])
+    @@index([accountId, date])
 }

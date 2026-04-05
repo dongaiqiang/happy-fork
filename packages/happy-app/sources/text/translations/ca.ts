@@ -118,7 +118,7 @@ export const ca: TranslationStructure = {
         developer: 'Desenvolupador',
         developerTools: 'Eines de desenvolupador',
         about: 'Quant a',
-        aboutFooter: 'Happy Coder és un client mòbil de Codex i Claude Code. Tot està xifrat punt a punt i el teu compte es guarda només al teu dispositiu. No està afiliat amb Anthropic.',
+        aboutFooter: 'HelloVibe t\'ajuda a començar el teu primer vibe coding amb més facilitat. Tot està xifrat punt a punt i el teu compte es guarda només al teu dispositiu. No està afiliat amb Anthropic.',
         whatsNew: 'Novetats',
         whatsNewSubtitle: 'Mira les últimes actualitzacions i millores',
         reportIssue: 'Informa d\'un problema',
@@ -904,7 +904,7 @@ export const ca: TranslationStructure = {
         loginRequiredDescription: 'This browser is not signed in yet, so it cannot approve this Mac connection. Create an account or restore your existing one in this browser first, then return here and tap "Accept Connection".',
         loginFirst: 'Sign in first',
         connectTerminal: 'Connecta el terminal',
-        terminalRequestDescription: 'Un terminal està sol·licitant connectar-se al teu compte de Happy Coder. Això permetrà al terminal enviar i rebre missatges de forma segura.',
+        terminalRequestDescription: 'Un terminal està sol·licitant connectar-se al teu compte de HelloVibe. Això permetrà al terminal enviar i rebre missatges de forma segura.',
         connectionDetails: 'Detalls de la connexió',
         publicKey: 'Clau pública',
         encryption: 'Xifratge',
@@ -961,8 +961,8 @@ export const ca: TranslationStructure = {
 
     welcome: {
         // Main welcome screen for unauthenticated users
-        title: 'Client mòbil de Codex i Claude Code',
-        subtitle: 'Xifrat punt a punt i el teu compte s\'emmagatzema només al teu dispositiu.',
+        title: 'HelloVibe',
+        subtitle: 'Comença el teu primer vibe coding amb facilitat.',
         createAccount: 'Crea un compte',
         linkOrRestoreAccount: 'Enllaça o restaura un compte',
         loginWithMobileApp: 'Inicia sessió amb l\'aplicació mòbil',
@@ -1247,6 +1247,34 @@ export const ca: TranslationStructure = {
         friendRequestGeneric: 'Nova sol·licitud d\'amistat',
         friendAccepted: ({ name }: { name: string }) => `Ara ets amic de ${name}`,
         friendAcceptedGeneric: 'Sol·licitud d\'amistat acceptada',
+    },
+
+    quota: {
+        limitExceeded: 'Usage Limit Exceeded',
+        dailyLimitExceeded: 'Your daily free quota has been used up. It will reset at midnight (Beijing time) tomorrow.',
+        monthlyLimitExceeded: 'Your monthly free quota has been used up. It will reset at midnight (Beijing time) on the 1st of next month.',
+        insufficientQuota: 'Insufficient Quota',
+        insufficientQuotaMessage: 'Estimated tokens exceed your remaining quota.',
+        upgrade: 'Upgrade Plan',
+        viewUsage: 'View Usage',
+        dailyRemaining: 'Daily Remaining',
+        monthlyRemaining: 'Monthly Remaining',
+        resetTime: 'Reset Time',
+        nextDailyReset: 'Next daily reset',
+        nextMonthlyReset: 'Next monthly reset',
+        currentTier: 'Current Plan',
+        upgradeToPro: 'Upgrade to Pro',
+        upgradeToStudent: 'Upgrade to Student',
+        upgradeToTeam: 'Upgrade to Team',
+        upgradeToEnterprise: 'Contact Sales',
+        freePlan: 'Free Plan',
+        studentPlan: 'Student Plan',
+        proPlan: 'Pro Plan',
+        teamPlan: 'Team Plan',
+        enterprisePlan: 'Enterprise Plan',
+        tokensUsed: 'Tokens Used',
+        tokensLimit: 'Token Limit',
+        usagePercentage: 'Usage Percentage',
     }
 } as const;
 

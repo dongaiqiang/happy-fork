@@ -47,7 +47,7 @@ export default function ClaudeOAuth() {
 
     return (
         <>
-            <OAuthViewUnsupported name="Claude" command="happy connect claude" />
+            <OAuthViewUnsupported name="Claude" command="hellovibe connect claude" />
             {/* <OAuthView
                 name="Claude"
                 command="happy connect claude"
@@ -68,7 +68,7 @@ const OAuthViewUnsupported = React.memo((props: {
     name: string;
     command?: string;
 }) => {
-    const command = props.command || `happy connect ${props.name.toLowerCase()}`;
+    const command = props.command || `hellovibe connect ${props.name.toLowerCase()}`;
 
     return (
         <View style={styles.unsupportedContainer}>

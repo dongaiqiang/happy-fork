@@ -556,7 +556,7 @@ export const zhHans: TranslationStructure = {
         createDirectoryTitle: '创建目录？',
         createDirectoryMessage: ({ directory }: { directory: string }) =>
             `目录“${directory}”不存在。要现在创建吗？`,
-        resumeRpcUnavailable: '守护进程虽然正在运行，但当前没有连上后端 WebSocket，因此服务端无法通过 RPC 访问这台设备。请重启 happy-server 和守护进程后再试。',
+        resumeRpcUnavailable: '守护进程虽然正在运行，但当前没有连上后端 WebSocket，因此服务端无法通过 RPC 访问这台设备。请重启 hellovibe-server 和守护进程后再试。',
         resumeMachineOffline: '设备当前离线。请先在这台设备上启动守护进程后再试。',
         openOnMacTitle: '在 Mac 上打开',
         openOnMacConfirm: '在 Mac 上打开',
@@ -573,7 +573,7 @@ export const zhHans: TranslationStructure = {
         openOnMacSuccessSameSession: '已在 Mac 上打开 Claude。现在默认由 Mac 控制，手机端为只读。',
         openOnMacAuthHint: '提示：守护进程使用的 Claude 登录态 / 配置可能与当前终端不同。请用相同登录环境重启守护进程后重试。',
         openOnMacRouteMissing: ({ claudeSessionId, directory }: { claudeSessionId: string; directory: string }) =>
-            `在 Mac 上打开失败\n原因：当前服务还没有部署“在 Mac 上打开”所需接口。请重新部署 happy-server 后再试。\nclaudeSessionId: ${claudeSessionId}\ndirectory: ${directory}`,
+            `在 Mac 上打开失败\n原因：当前服务还没有部署"在 Mac 上打开"所需接口。请重新部署 hellovibe-server 后再试。\nclaudeSessionId: ${claudeSessionId}\ndirectory: ${directory}`,
         openOnMacFailedWithReason: ({ reason, claudeSessionId, directory, hint }: { reason: string; claudeSessionId: string; directory: string; hint?: string }) =>
             `在 Mac 上打开失败\n原因：${reason}\nclaudeSessionId: ${claudeSessionId}\ndirectory: ${directory}${hint ? `\n${hint}` : ''}`,
         switchControlToMac: '切换为 Mac 控制',
@@ -1249,5 +1249,34 @@ export const zhHans: TranslationStructure = {
         friendRequestGeneric: '新的好友请求',
         friendAccepted: ({ name }: { name: string }) => `您现在与 ${name} 成为了好友`,
         friendAcceptedGeneric: '好友请求已接受',
-    }
+    },
+
+    quota: {
+        // Quota and usage limit messages
+        limitExceeded: '用量限额已用尽',
+        dailyLimitExceeded: '您的今日免费额度已用完，将在明日 0 点 (北京时间) 重置。',
+        monthlyLimitExceeded: '您的本月免费额度已用完，将在下月 1 号 0 点 (北京时间) 重置。',
+        insufficientQuota: '额度不足',
+        insufficientQuotaMessage: '预估 tokens 超出您的剩余额度。',
+        upgrade: '升级套餐',
+        viewUsage: '查看用量',
+        dailyRemaining: '今日剩余',
+        monthlyRemaining: '本月剩余',
+        resetTime: '重置时间',
+        nextDailyReset: '下次日重置',
+        nextMonthlyReset: '下次月重置',
+        currentTier: '当前套餐',
+        upgradeToPro: '升级专业版',
+        upgradeToStudent: '升级学生版',
+        upgradeToTeam: '升级团队版',
+        upgradeToEnterprise: '联系销售',
+        freePlan: '免费版',
+        studentPlan: '学生版',
+        proPlan: '专业版',
+        teamPlan: '团队版',
+        enterprisePlan: '企业版',
+        tokensUsed: '已用 tokens',
+        tokensLimit: 'token 限额',
+        usagePercentage: '用量百分比',
+    },
 } as const;

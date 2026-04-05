@@ -456,6 +456,12 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
       return
 
     } else if (daemonSubcommand === 'start') {
+      const credentials = await readCredentials()
+      if (!credentials) {
+        console.error('Not authenticated. Run "happy auth login" to authenticate before starting the daemon.')
+        process.exit(1)
+      }
+
       // Spawn detached daemon process
       const child = spawnHappyCLI(['daemon', 'start-sync'], {
         detached: true,
@@ -482,8 +488,13 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
       }
       process.exit(0);
     } else if (daemonSubcommand === 'start-sync') {
-      await startDaemon()
-      process.exit(0)
+      try {
+        await startDaemon()
+        process.exit(0)
+      } catch (error) {
+        console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
+        process.exit(1)
+      }
     } else if (daemonSubcommand === 'stop') {
       await stopDaemon()
       process.exit(0)
@@ -560,8 +571,6 @@ ${chalk.bold('To clean up runaway processes:')} Use ${chalk.cyan('happy doctor c
         unknownArgs.push(arg)
       } else if (arg === '-v' || arg === '--version') {
         showVersion = true
-        // Also pass through to claude (will show after our version)
-        unknownArgs.push(arg)
       } else if (arg === '--happy-starting-mode') {
         options.startingMode = z.enum(['local', 'remote']).parse(args[++i])
       } else if (arg === '--yolo') {
@@ -621,13 +630,6 @@ ${chalk.bold('To clean up runaway processes:')} Use ${chalk.cyan('happy doctor c
     // Add unknown args to claudeArgs
     if (unknownArgs.length > 0) {
       options.claudeArgs = [...(options.claudeArgs || []), ...unknownArgs]
-    }
-
-    // Resolve Chrome mode: explicit flag > settings > false
-    const settings = await readSettings()
-    const chromeEnabled = chromeOverride ?? settings.chromeMode ?? false
-    if (chromeEnabled) {
-      options.claudeArgs = [...(options.claudeArgs || []), '--chrome']
     }
 
     // Show help
@@ -690,7 +692,14 @@ ${chalk.bold.cyan('Claude Code Options (from `claude --help`):')}
     // Show version
     if (showVersion) {
       console.log(`happy version: ${packageJson.version}`)
-      // Don't exit - continue to pass --version to Claude Code
+      process.exit(0)
+    }
+
+    // Resolve Chrome mode: explicit flag > settings > false
+    const settings = await readSettings()
+    const chromeEnabled = chromeOverride ?? settings.chromeMode ?? false
+    if (chromeEnabled) {
+      options.claudeArgs = [...(options.claudeArgs || []), '--chrome']
     }
 
     // Normal flow - auth and machine setup

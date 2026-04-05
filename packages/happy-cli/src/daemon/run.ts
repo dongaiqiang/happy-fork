@@ -220,7 +220,7 @@ export async function startDaemon(): Promise<void> {
     }
 
     // Ensure auth and machine registration BEFORE anything else
-    const { credentials, machineId } = await authAndSetupMachineIfNeeded();
+    const { credentials, machineId } = await authAndSetupMachineIfNeeded({ interactive: false });
     logger.debug('[DAEMON RUN] Auth and machine setup complete');
 
     // Setup state - key by PID

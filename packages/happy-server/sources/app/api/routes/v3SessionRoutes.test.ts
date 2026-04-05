@@ -32,6 +32,18 @@ type MachineRecord = {
     active: boolean;
 };
 
+type SubscriptionPlanRecord = {
+    accountId: string;
+    tier: string;
+};
+
+type DailyUsageRecord = {
+    accountId: string;
+    date: string;
+    tokensUsed: number;
+    requests: number;
+};
+
 const {
     state,
     emitUpdateMock,
@@ -45,6 +57,8 @@ const {
         sessions: [] as SessionRecord[],
         messages: [] as MessageRecord[],
         machines: [] as MachineRecord[],
+        subscriptionPlans: [] as SubscriptionPlanRecord[],
+        dailyUsages: [] as DailyUsageRecord[],
         accountSeqById: new Map<string, number>(),
         nextMessageId: 1,
         nowMs: 1700000000000,
@@ -55,6 +69,8 @@ const {
         state.sessions = [];
         state.messages = [];
         state.machines = [];
+        state.subscriptionPlans = [];
+        state.dailyUsages = [];
         state.accountSeqById = new Map<string, number>();
         state.nextMessageId = 1;
         state.nowMs = 1700000000000;
@@ -233,6 +249,81 @@ const {
         return selectFields(row as unknown as Record<string, unknown>, args?.select);
     });
 
+    const subscriptionPlanFindUnique = vi.fn(async (args: any) => {
+        const row = state.subscriptionPlans.find((plan) => (
+            plan.accountId === args?.where?.accountId
+        ));
+        return row ? { ...row } : null;
+    });
+
+    const dailyUsageFindUnique = vi.fn(async (args: any) => {
+        const key = args?.where?.accountId_date;
+        if (!key) {
+            return null;
+        }
+        const row = state.dailyUsages.find((usage) => (
+            usage.accountId === key.accountId &&
+            usage.date === key.date
+        ));
+        return row ? { ...row } : null;
+    });
+
+    const dailyUsageGroupBy = vi.fn(async (args: any) => {
+        const where = args?.where ?? {};
+        let rows = [...state.dailyUsages];
+        if (where.accountId) {
+            rows = rows.filter((usage) => usage.accountId === where.accountId);
+        }
+        if (where.date?.gte) {
+            rows = rows.filter((usage) => usage.date >= where.date.gte);
+        }
+
+        if (rows.length === 0) {
+            return [];
+        }
+
+        const tokensUsed = rows.reduce((sum, usage) => sum + usage.tokensUsed, 0);
+        return [{
+            accountId: rows[0].accountId,
+            _sum: {
+                tokensUsed
+            }
+        }];
+    });
+
+    const dailyUsageUpsert = vi.fn(async (args: any) => {
+        const key = args?.where?.accountId_date;
+        if (!key) {
+            throw new Error("Missing daily usage key");
+        }
+        const existing = state.dailyUsages.find((usage) => (
+            usage.accountId === key.accountId &&
+            usage.date === key.date
+        ));
+
+        if (existing) {
+            existing.tokensUsed += args?.update?.tokensUsed?.increment ?? 0;
+            existing.requests += args?.update?.requests?.increment ?? 0;
+            return { ...existing };
+        }
+
+        const created: DailyUsageRecord = {
+            accountId: args?.create?.accountId,
+            date: args?.create?.date,
+            tokensUsed: args?.create?.tokensUsed ?? 0,
+            requests: args?.create?.requests ?? 0
+        };
+        state.dailyUsages.push(created);
+        return { ...created };
+    });
+
+    const usageReportUpsert = vi.fn(async (args: any) => ({
+        accountId: args?.create?.accountId ?? args?.where?.accountId_sessionId_key?.accountId,
+        sessionId: args?.create?.sessionId ?? args?.where?.accountId_sessionId_key?.sessionId,
+        key: args?.create?.key ?? args?.where?.accountId_sessionId_key?.key,
+        data: args?.create?.data ?? args?.update?.data ?? null
+    }));
+
     const txClient = {
         session: {
             update: sessionUpdate
@@ -257,6 +348,17 @@ const {
         },
         machine: {
             findFirst: machineFindFirst
+        },
+        subscriptionPlan: {
+            findUnique: subscriptionPlanFindUnique
+        },
+        dailyUsage: {
+            findUnique: dailyUsageFindUnique,
+            groupBy: dailyUsageGroupBy,
+            upsert: dailyUsageUpsert
+        },
+        usageReport: {
+            upsert: usageReportUpsert
         },
         sessionMessage: {
             findMany: sessionMessageFindMany,
@@ -353,6 +455,18 @@ function decryptRpcPayload(payload: string, key: Uint8Array): any {
     decipher.setAuthTag(authTag);
     const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
     return JSON.parse(plaintext.toString('utf8'));
+}
+
+function decodePlaintextRpcPayload(payload: string): any {
+    const decoded = Buffer.from(payload, 'base64').toString('utf8');
+    const jsonStartIndex = Math.max(decoded.indexOf('{'), decoded.indexOf('['));
+    return JSON.parse(decoded.slice(jsonStartIndex));
+}
+
+function createMissingTableError(table: string) {
+    return Object.assign(new Error(`The table \`${table}\` does not exist in the current database.`), {
+        code: 'P2021'
+    });
 }
 
 describe("v3SessionRoutes", () => {
@@ -514,6 +628,56 @@ describe("v3SessionRoutes", () => {
         expect(emitUpdateMock).toHaveBeenCalledTimes(1);
     });
 
+    it("continues sending messages when quota tables are missing during quota lookup", async () => {
+        seedSession({ id: "session-1", accountId: "user-1", seq: 0 });
+        dbMock.subscriptionPlan.findUnique.mockImplementationOnce(async () => {
+            throw createMissingTableError("SubscriptionPlan");
+        });
+
+        app = await createApp();
+        const response = await app.inject({
+            method: "POST",
+            url: "/v3/sessions/session-1/messages",
+            headers: { "x-user-id": "user-1" },
+            payload: {
+                messages: [
+                    { localId: "l1", content: "enc-content-1" }
+                ]
+            }
+        });
+
+        expect(response.statusCode).toBe(200);
+        const body = response.json();
+        expect(body.messages).toHaveLength(1);
+        expect(body.messages[0].seq).toBe(1);
+        expect(state.messages).toHaveLength(1);
+    });
+
+    it("continues sending messages when quota tables are missing during usage update", async () => {
+        seedSession({ id: "session-1", accountId: "user-1", seq: 0 });
+        dbMock.dailyUsage.upsert.mockImplementationOnce(async () => {
+            throw createMissingTableError("DailyUsage");
+        });
+
+        app = await createApp();
+        const response = await app.inject({
+            method: "POST",
+            url: "/v3/sessions/session-1/messages",
+            headers: { "x-user-id": "user-1" },
+            payload: {
+                messages: [
+                    { localId: "l1", content: "enc-content-1" }
+                ]
+            }
+        });
+
+        expect(response.statusCode).toBe(200);
+        const body = response.json();
+        expect(body.messages).toHaveLength(1);
+        expect(body.messages[0].seq).toBe(1);
+        expect(state.messages).toHaveLength(1);
+    });
+
     it("sends multiple messages with sequential seq numbers", async () => {
         seedSession({ id: "session-1", accountId: "user-1", seq: 0 });
 
@@ -664,7 +828,7 @@ describe("v3SessionRoutes", () => {
         expect(state.messages).toHaveLength(0);
     });
 
-    it("switches controller to mac after successful Open in Mac handoff", async () => {
+    it("switches controller to mac after successful Open in Mac handoff with raw machine key", async () => {
         const machineKey = new Uint8Array(32).fill(7);
         seedSession({
             id: "session-1",
@@ -731,6 +895,142 @@ describe("v3SessionRoutes", () => {
         }
         const [, rpcRequest] = firstRpcCall as unknown as [string, { params: string }];
         const rpcPayload = decryptRpcPayload(rpcRequest.params, machineKey);
+        expect(rpcPayload.tmuxSessionId).toBe("happy:window-1");
+        expect(rpcPayload.terminalCarrierMode).toBe("hosted");
+    });
+
+    it("switches controller to mac after successful Open in Mac handoff with encrypted machine key bundle", async () => {
+        const encryptedMachineKeyBundle = new Uint8Array(105).fill(9);
+        encryptedMachineKeyBundle[0] = 0;
+        seedSession({
+            id: "session-1",
+            accountId: "user-1",
+            controller: "mobile",
+            controllerLeaseVersion: 3,
+            handoffState: "idle"
+        });
+        seedMachine({
+            id: "machine-1",
+            accountId: "user-1",
+            dataEncryptionKey: encryptedMachineKeyBundle,
+            active: true
+        });
+
+        const emitWithAck = vi.fn(async () => ({
+            type: "success",
+            sessionId: "session-1"
+        }));
+        state.connections = new Set([{
+            connectionType: 'machine-scoped',
+            machineId: 'machine-1',
+            socket: {
+                connected: true,
+                timeout: () => ({
+                    emitWithAck
+                })
+            }
+        }]);
+
+        app = await createApp();
+        const response = await app.inject({
+            method: "POST",
+            url: "/v3/sessions/session-1/handoff/mac",
+            headers: { "x-user-id": "user-1" },
+            payload: {
+                expectedLeaseVersion: 3,
+                machineId: "machine-1",
+                directory: "/tmp/demo",
+                claudeSessionId: "claude-1",
+                tmuxSessionId: "happy:window-1",
+                openTerminal: true,
+                terminalCarrierMode: "hosted"
+            }
+        });
+
+        expect(response.statusCode).toBe(200);
+        const body = response.json();
+        expect(body.success).toBe(true);
+        expect(body.state.controller).toBe("mac");
+        expect(body.state.leaseVersion).toBe(4);
+        expect(body.state.handoffState).toBe("idle");
+
+        const firstRpcCall = emitWithAck.mock.calls[0];
+        expect(firstRpcCall).toBeTruthy();
+        if (!firstRpcCall) {
+            throw new Error("Missing RPC call");
+        }
+        const [eventName, rpcRequest] = firstRpcCall as unknown as [string, { params: Record<string, unknown> }];
+        expect(eventName).toBe("rpc-request-plaintext");
+        expect(rpcRequest.params.tmuxSessionId).toBe("happy:window-1");
+        expect(rpcRequest.params.terminalCarrierMode).toBe("hosted");
+    });
+
+    it("falls back to rpc-request when plaintext event is not acknowledged", async () => {
+        const encryptedMachineKeyBundle = new Uint8Array(105).fill(9);
+        encryptedMachineKeyBundle[0] = 0;
+        seedSession({
+            id: "session-1",
+            accountId: "user-1",
+            controller: "mobile",
+            controllerLeaseVersion: 3,
+            handoffState: "idle"
+        });
+        seedMachine({
+            id: "machine-1",
+            accountId: "user-1",
+            dataEncryptionKey: encryptedMachineKeyBundle,
+            active: true
+        });
+
+        const emitWithAck = vi.fn(async (eventName: string) => {
+            if (eventName === "rpc-request-plaintext") {
+                throw new Error("operation has timed out");
+            }
+            return Buffer.from(JSON.stringify({
+                type: "success",
+                sessionId: "session-1"
+            })).toString("base64");
+        });
+        state.connections = new Set([{
+            connectionType: 'machine-scoped',
+            machineId: 'machine-1',
+            socket: {
+                connected: true,
+                timeout: () => ({
+                    emitWithAck
+                })
+            }
+        }]);
+
+        app = await createApp();
+        const response = await app.inject({
+            method: "POST",
+            url: "/v3/sessions/session-1/handoff/mac",
+            headers: { "x-user-id": "user-1" },
+            payload: {
+                expectedLeaseVersion: 3,
+                machineId: "machine-1",
+                directory: "/tmp/demo",
+                claudeSessionId: "claude-1",
+                tmuxSessionId: "happy:window-1",
+                openTerminal: true,
+                terminalCarrierMode: "hosted"
+            }
+        });
+
+        expect(response.statusCode).toBe(200);
+        const body = response.json();
+        expect(body.success).toBe(true);
+        expect(emitWithAck).toHaveBeenCalledTimes(2);
+
+        const fallbackCall = emitWithAck.mock.calls[1];
+        expect(fallbackCall).toBeTruthy();
+        if (!fallbackCall) {
+            throw new Error("Missing fallback RPC call");
+        }
+        const [eventName, rpcRequest] = fallbackCall as unknown as [string, { params: string }];
+        expect(eventName).toBe("rpc-request");
+        const rpcPayload = decodePlaintextRpcPayload(rpcRequest.params);
         expect(rpcPayload.tmuxSessionId).toBe("happy:window-1");
         expect(rpcPayload.terminalCarrierMode).toBe("hosted");
     });

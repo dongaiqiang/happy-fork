@@ -6,6 +6,7 @@ import { z } from "zod";
 import { type Fastify } from "../types";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import tweetnacl from "tweetnacl";
+import { estimateTokens, updateUsage, getUserQuota } from "@/app/api/middleware/tokenQuota";
 
 const getMessagesQuerySchema = z.object({
     after_seq: z.coerce.number().int().min(0).default(0),
@@ -109,6 +110,23 @@ function decodeBase64(data: string): Uint8Array {
     return new Uint8Array(Buffer.from(data, 'base64'));
 }
 
+function encodePlaintextRpcPayload(payload: any): string {
+    return encodeBase64(new TextEncoder().encode(`PLAINTEXT:${JSON.stringify(payload)}`));
+}
+
+function decodePlaintextRpcPayload(payload: string): any | null {
+    try {
+        const decoded = new TextDecoder().decode(decodeBase64(payload));
+        const jsonStartIndex = Math.max(decoded.indexOf('{'), decoded.indexOf('['));
+        if (jsonStartIndex === -1) {
+            return null;
+        }
+        return JSON.parse(decoded.slice(jsonStartIndex));
+    } catch {
+        return null;
+    }
+}
+
 function encryptLegacy(data: any, key: Uint8Array): Uint8Array {
     const nonce = new Uint8Array(randomBytes(tweetnacl.secretbox.nonceLength));
     const encrypted = tweetnacl.secretbox(new TextEncoder().encode(JSON.stringify(data)), nonce, key);
@@ -175,12 +193,61 @@ function encryptRpcPayload(payload: any, key: Uint8Array, variant: 'dataKey' | '
     return encodeBase64(encrypted);
 }
 
+async function callConnectionRpcPlaintext(
+    connectionSocket: any,
+    method: string,
+    params: any
+): Promise<{ success: boolean; result?: any; error?: string }> {
+    let directEventError: string | undefined;
+    try {
+        const response = await connectionSocket.timeout(30000).emitWithAck('rpc-request-plaintext', {
+            method,
+            params
+        });
+        if (!response || typeof response !== 'object') {
+            return { success: false, error: 'invalid-rpc-response' };
+        }
+        if (typeof response.error === 'string') {
+            return { success: false, error: response.error };
+        }
+        return { success: true, result: response };
+    } catch (error) {
+        directEventError = error instanceof Error ? error.message : 'rpc-call-failed';
+    }
+
+    try {
+        const response = await connectionSocket.timeout(30000).emitWithAck('rpc-request', {
+            method,
+            params: encodePlaintextRpcPayload(params)
+        });
+        if (typeof response !== 'string') {
+            return { success: false, error: 'invalid-rpc-response' };
+        }
+        const decoded = decodePlaintextRpcPayload(response);
+        if (decoded === null) {
+            return { success: false, error: 'invalid-rpc-response' };
+        }
+        if (decoded && typeof decoded === 'object' && typeof decoded.error === 'string') {
+            return { success: false, error: decoded.error };
+        }
+        return { success: true, result: decoded };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : (directEventError ?? 'rpc-call-failed')
+        };
+    }
+}
+
 async function callConnectionRpcWithVariantRetry(
     connectionSocket: any,
     method: string,
     params: any,
     key: Uint8Array
 ): Promise<{ success: boolean; result?: any; error?: string }> {
+    if (key.length !== 32) {
+        return callConnectionRpcPlaintext(connectionSocket, method, params);
+    }
     const variants: Array<'dataKey' | 'legacy'> = ['dataKey', 'legacy'];
     let lastError = 'rpc-call-failed';
     for (const variant of variants) {
@@ -685,6 +752,37 @@ export function v3SessionRoutes(app: Fastify) {
         const writerSourceHeader = request.headers['x-happy-message-source'];
         const isCliWriter = writerSourceHeader === 'cli';
 
+        // 估算本次请求的 tokens 消耗
+        const estimatedTokens = messages.reduce((sum, msg) => {
+            return sum + estimateTokens(msg.content);
+        }, 0);
+
+        // 检查配额
+        const quota = await getUserQuota(userId);
+        if (quota && estimatedTokens > quota.dailyRemaining) {
+            return reply.code(429).send({
+                error: 'insufficient_quota',
+                message: '预估 tokens 超出剩余额度',
+                estimated: estimatedTokens,
+                remaining: quota.dailyRemaining,
+                dailyLimit: quota.dailyLimit,
+                dailyUsed: quota.dailyUsed,
+                upgradeUrl: '/pricing',
+            });
+        }
+
+        if (quota && estimatedTokens > quota.monthlyRemaining) {
+            return reply.code(429).send({
+                error: 'insufficient_quota',
+                message: '本月额度不足',
+                estimated: estimatedTokens,
+                remaining: quota.monthlyRemaining,
+                monthlyLimit: quota.monthlyLimit,
+                monthlyUsed: quota.monthlyUsed,
+                upgradeUrl: '/pricing',
+            });
+        }
+
         const session = await db.session.findFirst({
             where: {
                 id: sessionId,
@@ -799,8 +897,15 @@ export function v3SessionRoutes(app: Fastify) {
             });
         }
 
+        // 更新用量记录
+        await updateUsage(userId, estimatedTokens, sessionId);
+
         return reply.send({
-            messages: txResult.responseMessages.map(toSendResponseMessage)
+            messages: txResult.responseMessages.map(toSendResponseMessage),
+            quota: quota ? {
+                dailyRemaining: quota.dailyRemaining - estimatedTokens,
+                monthlyRemaining: quota.monthlyRemaining - estimatedTokens,
+            } : undefined,
         });
     });
 }

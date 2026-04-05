@@ -129,7 +129,7 @@ export const pl: TranslationStructure = {
         developer: 'Deweloper',
         developerTools: 'Narzędzia deweloperskie',
         about: 'O aplikacji',
-        aboutFooter: 'Happy Coder to mobilny klient Codex i Claude Code. Jest w pełni szyfrowany end-to-end, a Twoje konto jest przechowywane tylko na Twoim urządzeniu. Nie jest powiązany z Anthropic.',
+        aboutFooter: 'HelloVibe pomaga łatwiej rozpocząć pierwszy vibe coding. Jest w pełni szyfrowany end-to-end, a Twoje konto jest przechowywane tylko na Twoim urządzeniu. Nie jest powiązany z Anthropic.',
         whatsNew: 'Co nowego',
         whatsNewSubtitle: 'Zobacz najnowsze aktualizacje i ulepszenia',
         reportIssue: 'Zgłoś problem',
@@ -914,7 +914,7 @@ export const pl: TranslationStructure = {
         loginRequiredDescription: 'This browser is not signed in yet, so it cannot approve this Mac connection. Create an account or restore your existing one in this browser first, then return here and tap "Accept Connection".',
         loginFirst: 'Sign in first',
         connectTerminal: 'Połącz terminal',
-        terminalRequestDescription: 'Terminal żąda połączenia z Twoim kontem Happy Coder. Pozwoli to terminalowi bezpiecznie wysyłać i odbierać wiadomości.',
+        terminalRequestDescription: 'Terminal żąda połączenia z Twoim kontem HelloVibe. Pozwoli to terminalowi bezpiecznie wysyłać i odbierać wiadomości.',
         connectionDetails: 'Szczegóły połączenia',
         publicKey: 'Klucz publiczny',
         encryption: 'Szyfrowanie',
@@ -971,8 +971,8 @@ export const pl: TranslationStructure = {
 
     welcome: {
         // Main welcome screen for unauthenticated users
-        title: 'Mobilny klient Codex i Claude Code',
-        subtitle: 'Szyfrowanie end-to-end, a Twoje konto jest przechowywane tylko na Twoim urządzeniu.',
+        title: 'HelloVibe',
+        subtitle: 'Łatwo rozpocznij swój pierwszy vibe coding.',
         createAccount: 'Utwórz konto',
         linkOrRestoreAccount: 'Połącz lub przywróć konto',
         loginWithMobileApp: 'Zaloguj się przez aplikację mobilną',
@@ -1272,6 +1272,34 @@ export const pl: TranslationStructure = {
             confirm: 'Usuń',
             cancel: 'Anuluj',
         },
+    },
+
+    quota: {
+        limitExceeded: 'Usage Limit Exceeded',
+        dailyLimitExceeded: 'Your daily free quota has been used up. It will reset at midnight (Beijing time) tomorrow.',
+        monthlyLimitExceeded: 'Your monthly free quota has been used up. It will reset at midnight (Beijing time) on the 1st of next month.',
+        insufficientQuota: 'Insufficient Quota',
+        insufficientQuotaMessage: 'Estimated tokens exceed your remaining quota.',
+        upgrade: 'Upgrade Plan',
+        viewUsage: 'View Usage',
+        dailyRemaining: 'Daily Remaining',
+        monthlyRemaining: 'Monthly Remaining',
+        resetTime: 'Reset Time',
+        nextDailyReset: 'Next daily reset',
+        nextMonthlyReset: 'Next monthly reset',
+        currentTier: 'Current Plan',
+        upgradeToPro: 'Upgrade to Pro',
+        upgradeToStudent: 'Upgrade to Student',
+        upgradeToTeam: 'Upgrade to Team',
+        upgradeToEnterprise: 'Contact Sales',
+        freePlan: 'Free Plan',
+        studentPlan: 'Student Plan',
+        proPlan: 'Pro Plan',
+        teamPlan: 'Team Plan',
+        enterprisePlan: 'Enterprise Plan',
+        tokensUsed: 'Tokens Used',
+        tokensLimit: 'Token Limit',
+        usagePercentage: 'Usage Percentage',
     }
 } as const;
 

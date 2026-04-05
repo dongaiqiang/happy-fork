@@ -16,7 +16,7 @@ import { t } from '@/text';
 import { useInboxHasContent } from '@/hooks/useInboxHasContent';
 import { Ionicons } from '@expo/vector-icons';
 
-const stylesheet = StyleSheet.create((theme, runtime) => ({
+const stylesheet = StyleSheet.create((theme) => ({
     container: {
         flex: 1,
         borderStyle: 'solid',
@@ -222,7 +222,7 @@ export const SidebarView = React.memo(() => {
                     {/* Logo - always first */}
                     <View style={styles.logoContainer}>
                         <Image
-                            source={theme.dark ? require('@/assets/images/logo-white.png') : require('@/assets/images/logo-black.png')}
+                            source={require('@/assets/images/icon.png')}
                             contentFit="contain"
                             style={[styles.logo, { height: 24, width: 24 }]}
                         />

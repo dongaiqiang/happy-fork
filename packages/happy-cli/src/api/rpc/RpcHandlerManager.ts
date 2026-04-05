@@ -55,38 +55,23 @@ export class RpcHandlerManager {
     async handleRequest(
         request: RpcRequest,
     ): Promise<any> {
+        let isPlaintextPayload = false;
         try {
-            const handler = this.handlers.get(request.method);
-
-            // --- PLAINTEXT MODE BYPASS ---
-            const isPlaintextMode = process.env.ENABLE_PLAINTEXT_MODE === 'true';
-            // -----------------------------
-
-            if (!handler) {
-                this.logger('[RPC] [ERROR] Method not found', { method: request.method });
-                const errorResponse = { error: 'Method not found' };
-                const encryptedError = isPlaintextMode
-                    ? encodeBase64(new TextEncoder().encode(JSON.stringify(errorResponse)))
-                    : encodeBase64(encrypt(this.encryptionKey, this.encryptionVariant, errorResponse));
-                return encryptedError;
-            }
-
-            // Decrypt the incoming params
             let decryptedParams;
-            if (isPlaintextMode) {
+            const plaintextParams = this.tryParsePlaintextParams(request.params);
+            if (plaintextParams !== null) {
+                isPlaintextPayload = true;
+                decryptedParams = plaintextParams;
+            } else if (process.env.ENABLE_PLAINTEXT_MODE === 'true') {
                 try {
-                    // Try to parse as direct JSON first
                     const decodedStr = new TextDecoder().decode(decodeBase64(request.params));
-                    
-                    // The App sends the payload as "PLAINTEXT:{"type":"spawn-in-directory"...}" due to how Expo/React Native handles Uint8Arrays in some cases,
-                    // or it sends it as "\x00PLAINTEXT:{...}" (with a leading null byte for format versioning)
-                    // Let's robustly extract the JSON part regardless of the prefix
                     let jsonStr = decodedStr;
                     const jsonStartIndex = Math.max(decodedStr.indexOf('{'), decodedStr.indexOf('['));
                     if (jsonStartIndex !== -1) {
                         jsonStr = decodedStr.substring(jsonStartIndex);
                     }
                     decryptedParams = JSON.parse(jsonStr);
+                    isPlaintextPayload = true;
                 } catch (e) {
                     this.logger('[RPC] [ERROR] Failed to parse plaintext params', { error: e });
                     throw new Error('Failed to parse plaintext params');
@@ -95,13 +80,9 @@ export class RpcHandlerManager {
                 decryptedParams = decrypt(this.encryptionKey, this.encryptionVariant, decodeBase64(request.params));
             }
 
-            // Call the handler
-            this.logger('[RPC] Calling handler', { method: request.method });
-            const result = await handler(decryptedParams);
-            this.logger('[RPC] Handler returned', { method: request.method, hasResult: result !== undefined });
+            const result = await this.invokeHandler(request.method, decryptedParams);
 
-            // Encrypt and return the response
-            const encryptedResponse = isPlaintextMode
+            const encryptedResponse = isPlaintextPayload
                 ? encodeBase64(new TextEncoder().encode(JSON.stringify(result)))
                 : encodeBase64(encrypt(this.encryptionKey, this.encryptionVariant, result));
             this.logger('[RPC] Sending encrypted response', { method: request.method, responseLength: encryptedResponse.length });
@@ -111,10 +92,20 @@ export class RpcHandlerManager {
             const errorResponse = {
                 error: error instanceof Error ? error.message : 'Unknown error'
             };
-            const isPlaintextMode = process.env.ENABLE_PLAINTEXT_MODE === 'true';
-            return isPlaintextMode
+            return isPlaintextPayload
                 ? encodeBase64(new TextEncoder().encode(JSON.stringify(errorResponse)))
                 : encodeBase64(encrypt(this.encryptionKey, this.encryptionVariant, errorResponse));
+        }
+    }
+
+    async handlePlaintextRequest(request: { method: string; params: any }): Promise<any> {
+        try {
+            return await this.invokeHandler(request.method, request.params);
+        } catch (error) {
+            this.logger('[RPC] [ERROR] Error handling plaintext request', { error });
+            return {
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
         }
     }
 
@@ -159,6 +150,32 @@ export class RpcHandlerManager {
      */
     private getPrefixedMethod(method: string): string {
         return `${this.scopePrefix}:${method}`;
+    }
+
+    private tryParsePlaintextParams(params: string): any | null {
+        try {
+            const decodedStr = new TextDecoder().decode(decodeBase64(params));
+            const normalized = decodedStr.startsWith('\0') ? decodedStr.slice(1) : decodedStr;
+            if (!normalized.startsWith('PLAINTEXT:')) {
+                return null;
+            }
+            return JSON.parse(normalized.slice('PLAINTEXT:'.length));
+        } catch {
+            return null;
+        }
+    }
+
+    private async invokeHandler(method: string, params: any): Promise<any> {
+        const handler = this.handlers.get(method);
+        if (!handler) {
+            this.logger('[RPC] [ERROR] Method not found', { method });
+            throw new Error('Method not found');
+        }
+
+        this.logger('[RPC] Calling handler', { method });
+        const result = await handler(params);
+        this.logger('[RPC] Handler returned', { method, hasResult: result !== undefined });
+        return result;
     }
 }
 

@@ -333,6 +333,8 @@ export async function sessionAbort(sessionId: string): Promise<void> {
 export async function sessionAllow(sessionId: string, id: string, mode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan', allowedTools?: string[], decision?: 'approved' | 'approved_for_session'): Promise<void> {
     const request: SessionPermissionRequest = { id, approved: true, mode, allowTools: allowedTools, decision };
     await apiSocket.sessionRPC(sessionId, 'permission', request);
+    sync.onSessionVisible(sessionId);
+    void sync.refreshSessions();
 }
 
 /**
@@ -341,6 +343,8 @@ export async function sessionAllow(sessionId: string, id: string, mode?: 'defaul
 export async function sessionDeny(sessionId: string, id: string, mode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan', allowedTools?: string[], decision?: 'denied' | 'abort'): Promise<void> {
     const request: SessionPermissionRequest = { id, approved: false, mode, allowTools: allowedTools, decision };
     await apiSocket.sessionRPC(sessionId, 'permission', request);
+    sync.onSessionVisible(sessionId);
+    void sync.refreshSessions();
 }
 
 /**

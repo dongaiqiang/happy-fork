@@ -268,7 +268,9 @@ export function decryptWithEphemeralKey(encryptedBundle: Uint8Array, recipientSe
  * Ensure authentication and machine setup
  * This replaces the onboarding flow and ensures everything is ready
  */
-export async function authAndSetupMachineIfNeeded(): Promise<{
+export async function authAndSetupMachineIfNeeded(options: {
+    interactive?: boolean;
+} = {}): Promise<{
     credentials: Credentials;
     machineId: string;
 }> {
@@ -279,6 +281,9 @@ export async function authAndSetupMachineIfNeeded(): Promise<{
     let newAuth = false;
 
     if (!credentials) {
+        if (options.interactive === false) {
+            throw new Error('Not authenticated. Run "happy auth login" to authenticate before starting the daemon.');
+        }
         logger.debug('[AUTH] No credentials found, starting authentication flow...');
         const authResult = await doAuth();
         if (!authResult) {

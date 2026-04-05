@@ -15,6 +15,7 @@ import { RpcHandlerManager } from './rpc/RpcHandlerManager';
 interface ServerToDaemonEvents {
     update: (data: Update) => void;
     'rpc-request': (data: { method: string, params: string }, callback: (response: string) => void) => void;
+    'rpc-request-plaintext': (data: { method: string, params: any }, callback: (response: any) => void) => void;
     'rpc-registered': (data: { method: string }) => void;
     'rpc-unregistered': (data: { method: string }) => void;
     'rpc-error': (data: { type: string, error: string }) => void;
@@ -284,6 +285,11 @@ export class ApiMachineClient {
         this.socket.on('rpc-request', async (data: { method: string, params: string }, callback: (response: string) => void) => {
             logger.debugLargeJson(`[API MACHINE] Received RPC request:`, data);
             callback(await this.rpcHandlerManager.handleRequest(data));
+        });
+
+        this.socket.on('rpc-request-plaintext', async (data: { method: string, params: any }, callback: (response: any) => void) => {
+            logger.debugLargeJson(`[API MACHINE] Received plaintext RPC request:`, data);
+            callback(await this.rpcHandlerManager.handlePlaintextRequest(data));
         });
 
         // Handle update events from server

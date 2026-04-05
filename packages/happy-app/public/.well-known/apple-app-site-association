@@ -4,7 +4,8 @@
       {
         "appIDs": [
           "466DQWDR8C.com.ex3ndr.happy",
-          "466DQWDR8C.com.hellovibe.app"
+          "466DQWDR8C.com.hellovibe.app",
+          "SJ7NF8JABX.com.hellovibe.app"
         ],
         "components": [
           {
@@ -18,7 +19,8 @@
   "activitycontinuation": {
     "apps": [
       "466DQWDR8C.com.ex3ndr.happy",
-      "466DQWDR8C.com.hellovibe.app"
+      "466DQWDR8C.com.hellovibe.app",
+      "SJ7NF8JABX.com.hellovibe.app"
     ]
   }
 }

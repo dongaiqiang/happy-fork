@@ -9,7 +9,7 @@ const bundleId = {
     preview: "com.hellovibe.app.preview",
     production: "com.hellovibe.app"
 }[variant];
-const slug = "hellovibe";
+const slug = "happy";
 const scheme = "hellovibe";
 const universalLinkHost = "app.hellovibe.com";
 const updatesUrl = process.env.EXPO_UPDATES_URL || "https://u.expo.dev/4558dd3d-cd5a-47cd-bad9-e591a241cc06";
