@@ -41,6 +41,18 @@ function getToolsDir() {
     return path.resolve(scriptDir, '..', 'tools');
 }
 
+function listBundledArchivePlatforms(archivesDir) {
+    if (!fs.existsSync(archivesDir)) {
+        return [];
+    }
+
+    return fs.readdirSync(archivesDir)
+        .map(file => file.match(/^(?:difftastic|ripgrep)-(.+)\.tar\.gz$/)?.[1] ?? null)
+        .filter(Boolean)
+        .filter((value, index, array) => array.indexOf(value) === index)
+        .sort();
+}
+
 /**
  * Check if tools are already unpacked for current platform
  */
@@ -111,6 +123,7 @@ async function unpackTools() {
         const toolsDir = getToolsDir();
         const archivesDir = path.join(toolsDir, 'archives');
         const unpackedPath = path.join(toolsDir, 'unpacked');
+        const bundledPlatforms = listBundledArchivePlatforms(archivesDir);
         
         // Check if already unpacked
         if (areToolsUnpacked(toolsDir)) {
@@ -128,14 +141,14 @@ async function unpackTools() {
         // Unpack difftastic
         const difftasticArchive = path.join(archivesDir, `difftastic-${platformDir}.tar.gz`);
         if (!fs.existsSync(difftasticArchive)) {
-            throw new Error(`Archive not found: ${difftasticArchive}`);
+            throw new Error(`Missing bundled archive for ${platformDir}. Available bundled platforms: ${bundledPlatforms.join(', ') || 'none'}`);
         }
         await unpackArchive(difftasticArchive, unpackedPath);
         
         // Unpack ripgrep
         const ripgrepArchive = path.join(archivesDir, `ripgrep-${platformDir}.tar.gz`);
         if (!fs.existsSync(ripgrepArchive)) {
-            throw new Error(`Archive not found: ${ripgrepArchive}`);
+            throw new Error(`Missing bundled archive for ${platformDir}. Available bundled platforms: ${bundledPlatforms.join(', ') || 'none'}`);
         }
         await unpackArchive(ripgrepArchive, unpackedPath);
         
@@ -149,12 +162,12 @@ async function unpackTools() {
 }
 
 // Export for use as module
-module.exports = { unpackTools, getPlatformDir, getToolsDir };
+module.exports = { unpackTools, getPlatformDir, getToolsDir, listBundledArchivePlatforms };
 
 // Run if executed directly
 if (require.main === module) {
     unpackTools()
-        .then(result => {
+        .then(() => {
             process.exit(0);
         })
         .catch(error => {
