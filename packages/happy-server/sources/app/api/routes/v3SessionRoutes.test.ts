@@ -25,6 +25,11 @@ type MessageRecord = {
     updatedAt: Date;
 };
 
+type AccountRecord = {
+    id: string;
+    createdAt: Date;
+};
+
 type MachineRecord = {
     id: string;
     accountId: string;
@@ -35,6 +40,9 @@ type MachineRecord = {
 type SubscriptionPlanRecord = {
     accountId: string;
     tier: string;
+    status: string;
+    startDate: Date;
+    endDate: Date | null;
 };
 
 type DailyUsageRecord = {
@@ -49,11 +57,13 @@ const {
     emitUpdateMock,
     dbMock,
     resetState,
+    seedAccount,
     seedSession,
     seedMachine,
     seedMessage
 } = vi.hoisted(() => {
     const state = {
+        accounts: [] as AccountRecord[],
         sessions: [] as SessionRecord[],
         messages: [] as MessageRecord[],
         machines: [] as MachineRecord[],
@@ -66,6 +76,7 @@ const {
     };
 
     const resetState = () => {
+        state.accounts = [];
         state.sessions = [];
         state.messages = [];
         state.machines = [];
@@ -77,7 +88,20 @@ const {
         state.connections = new Set<any>();
     };
 
+    const seedAccount = (input: { id: string; createdAt?: Date }) => {
+        const existing = state.accounts.find((account) => account.id === input.id);
+        if (existing) {
+            existing.createdAt = input.createdAt ?? existing.createdAt;
+            return;
+        }
+        state.accounts.push({
+            id: input.id,
+            createdAt: input.createdAt ?? new Date()
+        });
+    };
+
     const seedSession = (input: Partial<SessionRecord> & Pick<SessionRecord, "id" | "accountId">) => {
+        seedAccount({ id: input.accountId });
         state.sessions.push({
             id: input.id,
             accountId: input.accountId,
@@ -249,6 +273,13 @@ const {
         return selectFields(row as unknown as Record<string, unknown>, args?.select);
     });
 
+    const accountFindUnique = vi.fn(async (args: any) => {
+        const row = state.accounts.find((account) => (
+            account.id === args?.where?.id
+        ));
+        return row ? selectFields(row as unknown as Record<string, unknown>, args?.select) : null;
+    });
+
     const subscriptionPlanFindUnique = vi.fn(async (args: any) => {
         const row = state.subscriptionPlans.find((plan) => (
             plan.accountId === args?.where?.accountId
@@ -344,6 +375,7 @@ const {
             updateMany: sessionUpdateMany
         },
         account: {
+            findUnique: accountFindUnique,
             update: accountUpdate
         },
         machine: {
@@ -374,6 +406,7 @@ const {
         emitUpdateMock,
         dbMock,
         resetState,
+        seedAccount,
         seedSession,
         seedMachine,
         seedMessage
@@ -461,12 +494,6 @@ function decodePlaintextRpcPayload(payload: string): any {
     const decoded = Buffer.from(payload, 'base64').toString('utf8');
     const jsonStartIndex = Math.max(decoded.indexOf('{'), decoded.indexOf('['));
     return JSON.parse(decoded.slice(jsonStartIndex));
-}
-
-function createMissingTableError(table: string) {
-    return Object.assign(new Error(`The table \`${table}\` does not exist in the current database.`), {
-        code: 'P2021'
-    });
 }
 
 describe("v3SessionRoutes", () => {
@@ -628,11 +655,9 @@ describe("v3SessionRoutes", () => {
         expect(emitUpdateMock).toHaveBeenCalledTimes(1);
     });
 
-    it("continues sending messages when quota tables are missing during quota lookup", async () => {
+    it("returns unified 429 payload when the trial has expired", async () => {
         seedSession({ id: "session-1", accountId: "user-1", seq: 0 });
-        dbMock.subscriptionPlan.findUnique.mockImplementationOnce(async () => {
-            throw createMissingTableError("SubscriptionPlan");
-        });
+        state.accounts[0].createdAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
 
         app = await createApp();
         const response = await app.inject({
@@ -646,17 +671,24 @@ describe("v3SessionRoutes", () => {
             }
         });
 
-        expect(response.statusCode).toBe(200);
+        expect(response.statusCode).toBe(429);
         const body = response.json();
-        expect(body.messages).toHaveLength(1);
-        expect(body.messages[0].seq).toBe(1);
-        expect(state.messages).toHaveLength(1);
+        expect(body.error).toBe("validity_check_failed");
+        expect(body.reason).toBe("trial_expired");
+        expect(body.message).toContain("试用已到期");
+        expect(body.upgradeUrl).toBe("/pricing");
+        expect(typeof body.expiresAt).toBe("string");
+        expect(state.messages).toHaveLength(0);
     });
 
-    it("continues sending messages when quota tables are missing during usage update", async () => {
+    it("returns unified 429 payload when the subscription is inactive", async () => {
         seedSession({ id: "session-1", accountId: "user-1", seq: 0 });
-        dbMock.dailyUsage.upsert.mockImplementationOnce(async () => {
-            throw createMissingTableError("DailyUsage");
+        state.subscriptionPlans.push({
+            accountId: "user-1",
+            tier: "pro",
+            status: "cancelled",
+            startDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+            endDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
         });
 
         app = await createApp();
@@ -671,11 +703,125 @@ describe("v3SessionRoutes", () => {
             }
         });
 
-        expect(response.statusCode).toBe(200);
+        expect(response.statusCode).toBe(429);
         const body = response.json();
-        expect(body.messages).toHaveLength(1);
-        expect(body.messages[0].seq).toBe(1);
-        expect(state.messages).toHaveLength(1);
+        expect(body.error).toBe("validity_check_failed");
+        expect(body.reason).toBe("subscription_inactive");
+        expect(body.message).toContain("未激活");
+        expect(body.upgradeUrl).toBe("/pricing");
+        expect(typeof body.expiresAt).toBe("string");
+        expect(state.messages).toHaveLength(0);
+    });
+
+    it("returns unified 429 payload when the subscription has expired", async () => {
+        seedSession({ id: "session-1", accountId: "user-1", seq: 0 });
+        state.subscriptionPlans.push({
+            accountId: "user-1",
+            tier: "pro",
+            status: "active",
+            startDate: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000),
+            endDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        });
+
+        app = await createApp();
+        const response = await app.inject({
+            method: "POST",
+            url: "/v3/sessions/session-1/messages",
+            headers: { "x-user-id": "user-1" },
+            payload: {
+                messages: [
+                    { localId: "l1", content: "enc-content-1" }
+                ]
+            }
+        });
+
+        expect(response.statusCode).toBe(429);
+        const body = response.json();
+        expect(body.error).toBe("validity_check_failed");
+        expect(body.reason).toBe("subscription_expired");
+        expect(body.message).toContain("已过期");
+        expect(body.upgradeUrl).toBe("/pricing");
+        expect(typeof body.expiresAt).toBe("string");
+        expect(state.messages).toHaveLength(0);
+    });
+
+    it("returns unified 429 payload when daily quota is exhausted", async () => {
+        seedSession({ id: "session-1", accountId: "user-1", seq: 0 });
+        const today = new Date().toISOString().split("T")[0];
+        state.dailyUsages.push({
+            accountId: "user-1",
+            date: today,
+            tokensUsed: 5000,
+            requests: 1
+        });
+
+        app = await createApp();
+        const response = await app.inject({
+            method: "POST",
+            url: "/v3/sessions/session-1/messages",
+            headers: { "x-user-id": "user-1" },
+            payload: {
+                messages: [
+                    { localId: "l1", content: "enc-content-1" }
+                ]
+            }
+        });
+
+        expect(response.statusCode).toBe(429);
+        const body = response.json();
+        expect(body.error).toBe("quota_limit_exceeded");
+        expect(body.reason).toBe("daily_limit_exceeded");
+        expect(body.upgradeUrl).toBe("/pricing");
+        expect(body.remaining).toBe(0);
+        expect(body.dailyLimit).toBe(5000);
+        expect(body.dailyUsed).toBe(5000);
+        expect(body.estimated).toBeGreaterThan(0);
+        expect(state.messages).toHaveLength(0);
+    });
+
+    it("returns unified 429 payload when monthly quota is exhausted", async () => {
+        seedSession({ id: "session-1", accountId: "user-1", seq: 0 });
+        const today = new Date().toISOString().split("T")[0];
+        const currentMonthPreviousDay = new Date();
+        currentMonthPreviousDay.setUTCDate(Math.max(1, currentMonthPreviousDay.getUTCDate() - 1));
+        const previousDay = currentMonthPreviousDay.toISOString().split("T")[0];
+        state.dailyUsages.push(
+            {
+                accountId: "user-1",
+                date: previousDay,
+                tokensUsed: 99990,
+                requests: 1
+            },
+            {
+                accountId: "user-1",
+                date: today,
+                tokensUsed: 10,
+                requests: 1
+            }
+        );
+
+        app = await createApp();
+        const response = await app.inject({
+            method: "POST",
+            url: "/v3/sessions/session-1/messages",
+            headers: { "x-user-id": "user-1" },
+            payload: {
+                messages: [
+                    { localId: "l1", content: "enc-content-1" }
+                ]
+            }
+        });
+
+        expect(response.statusCode).toBe(429);
+        const body = response.json();
+        expect(body.error).toBe("quota_limit_exceeded");
+        expect(body.reason).toBe("monthly_limit_exceeded");
+        expect(body.upgradeUrl).toBe("/pricing");
+        expect(body.remaining).toBe(0);
+        expect(body.monthlyLimit).toBe(100000);
+        expect(body.monthlyUsed).toBe(100000);
+        expect(body.estimated).toBeGreaterThan(0);
+        expect(state.messages).toHaveLength(0);
     });
 
     it("sends multiple messages with sequential seq numbers", async () => {
@@ -728,6 +874,7 @@ describe("v3SessionRoutes", () => {
 
     it("enforces send validation limits and auth/session ownership", async () => {
         seedSession({ id: "session-1", accountId: "owner-user" });
+        seedAccount({ id: "another-user" });
         app = await createApp();
 
         const emptyBatch = await app.inject({

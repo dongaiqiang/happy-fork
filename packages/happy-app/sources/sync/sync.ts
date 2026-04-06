@@ -28,6 +28,7 @@ import { log } from '@/log';
 import { gitStatusSync } from './gitStatusSync';
 import { projectManager } from './projectManager';
 import { AsyncLock } from '@/utils/lock';
+import { isSessionReadOnlyOnMobile } from '@/utils/sessionControlUtils';
 import { voiceHooks } from '@/realtime/hooks/voiceHooks';
 import { Message } from './typesMessage';
 import { EncryptionCache } from './encryption/encryptionCache';
@@ -40,6 +41,7 @@ import { fetchFeed } from './apiFeed';
 import { FeedItem } from './feedTypes';
 import { UserProfile } from './friendTypes';
 import { resolveMessageModeMeta } from './messageMeta';
+import { normalizeMessageSendFailure, type MessageSendFailurePayload } from './messageSendFailure';
 
 type V3GetSessionMessagesResponse = {
     messages: ApiMessage[];
@@ -453,7 +455,7 @@ class Sync {
             console.error(`Session ${sessionId} not found in storage`);
             return;
         }
-        if (session.controller === 'mac' && session.handoffState === 'idle') {
+        if (isSessionReadOnlyOnMobile(session)) {
             return;
         }
 
@@ -1573,6 +1575,7 @@ class Sync {
         const batch = pending.slice();
         const controller = new AbortController();
         this.sendAbortControllers.set(sessionId, controller);
+        let nonRetryableFailureText: string | null = null;
         try {
             const response = await apiSocket.request(`/v3/sessions/${sessionId}/messages`, {
                 method: 'POST',
@@ -1588,26 +1591,58 @@ class Sync {
                 signal: controller.signal
             });
             if (!response.ok) {
-                throw new Error(`Failed to send messages for ${sessionId}: ${response.status}`);
-            }
-
-            const data = await response.json() as V3PostSessionMessagesResponse;
-            pending.splice(0, batch.length);
-            if (Array.isArray(data.messages) && data.messages.length > 0) {
-                const currentLastSeq = this.sessionLastSeq.get(sessionId) ?? 0;
-                let maxSeq = currentLastSeq;
-                for (const message of data.messages) {
-                    if (message.seq > maxSeq) {
-                        maxSeq = message.seq;
+                let payload: MessageSendFailurePayload | null = null;
+                const rawText = await response.text();
+                if (rawText) {
+                    try {
+                        payload = JSON.parse(rawText) as MessageSendFailurePayload;
+                    } catch {
+                        payload = null;
                     }
                 }
-                this.sessionLastSeq.set(sessionId, maxSeq);
+
+                const failure = normalizeMessageSendFailure(response.status, payload, sessionId);
+                if (failure.shouldStopRetry) {
+                    pending.splice(0, batch.length);
+                    nonRetryableFailureText = failure.reasonText;
+                } else {
+                    throw new Error(failure.reasonText);
+                }
+            }
+
+            if (!nonRetryableFailureText) {
+                const data = await response.json() as V3PostSessionMessagesResponse;
+                pending.splice(0, batch.length);
+                if (Array.isArray(data.messages) && data.messages.length > 0) {
+                    const currentLastSeq = this.sessionLastSeq.get(sessionId) ?? 0;
+                    let maxSeq = currentLastSeq;
+                    for (const message of data.messages) {
+                        if (message.seq > maxSeq) {
+                            maxSeq = message.seq;
+                        }
+                    }
+                    this.sessionLastSeq.set(sessionId, maxSeq);
+                }
             }
         } catch (error) {
             this.maybeStartBackgroundSendWatchdog();
             throw error;
         } finally {
             this.sendAbortControllers.delete(sessionId);
+        }
+
+        if (nonRetryableFailureText) {
+            this.enqueueMessages(sessionId, [{
+                id: randomUUID(),
+                localId: null,
+                createdAt: Date.now(),
+                role: 'event',
+                isSidechain: false,
+                content: {
+                    type: 'message',
+                    message: nonRetryableFailureText
+                }
+            }]);
         }
 
         if (pending.length === 0) {

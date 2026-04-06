@@ -6,7 +6,7 @@ import { z } from "zod";
 import { type Fastify } from "../types";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import tweetnacl from "tweetnacl";
-import { estimateTokens, updateUsage, getUserQuota } from "@/app/api/middleware/tokenQuota";
+import { checkSubscriptionValidity, estimateTokens, getQuotaLimitExceededResponse, getUserQuota, updateUsage } from "@/app/api/middleware/tokenQuota";
 
 const getMessagesQuerySchema = z.object({
     after_seq: z.coerce.number().int().min(0).default(0),
@@ -752,6 +752,11 @@ export function v3SessionRoutes(app: Fastify) {
         const writerSourceHeader = request.headers['x-happy-message-source'];
         const isCliWriter = writerSourceHeader === 'cli';
 
+        const validity = await checkSubscriptionValidity(userId);
+        if (!validity.allowed && validity.response) {
+            return reply.code(429).send(validity.response);
+        }
+
         // 估算本次请求的 tokens 消耗
         const estimatedTokens = messages.reduce((sum, msg) => {
             return sum + estimateTokens(msg.content);
@@ -760,27 +765,19 @@ export function v3SessionRoutes(app: Fastify) {
         // 检查配额
         const quota = await getUserQuota(userId);
         if (quota && estimatedTokens > quota.dailyRemaining) {
-            return reply.code(429).send({
-                error: 'insufficient_quota',
-                message: '预估 tokens 超出剩余额度',
+            return reply.code(429).send(getQuotaLimitExceededResponse({
+                reason: 'daily_limit_exceeded',
                 estimated: estimatedTokens,
-                remaining: quota.dailyRemaining,
-                dailyLimit: quota.dailyLimit,
-                dailyUsed: quota.dailyUsed,
-                upgradeUrl: '/pricing',
-            });
+                quota,
+            }));
         }
 
         if (quota && estimatedTokens > quota.monthlyRemaining) {
-            return reply.code(429).send({
-                error: 'insufficient_quota',
-                message: '本月额度不足',
+            return reply.code(429).send(getQuotaLimitExceededResponse({
+                reason: 'monthly_limit_exceeded',
                 estimated: estimatedTokens,
-                remaining: quota.monthlyRemaining,
-                monthlyLimit: quota.monthlyLimit,
-                monthlyUsed: quota.monthlyUsed,
-                upgradeUrl: '/pricing',
-            });
+                quota,
+            }));
         }
 
         const session = await db.session.findFirst({

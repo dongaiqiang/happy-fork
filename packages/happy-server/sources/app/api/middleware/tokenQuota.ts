@@ -49,6 +49,30 @@ export const QUOTA_TIERS = {
 };
 
 export type QuotaTier = keyof typeof QUOTA_TIERS;
+export type LimitViolationReason =
+    | 'daily_limit_exceeded'
+    | 'monthly_limit_exceeded'
+    | 'trial_expired'
+    | 'subscription_inactive'
+    | 'subscription_expired';
+export type LimitViolationError = 'quota_limit_exceeded' | 'validity_check_failed';
+export interface LimitViolationResponse {
+    error: LimitViolationError;
+    reason: LimitViolationReason;
+    message: string;
+    upgradeUrl: string;
+    estimated?: number;
+    remaining?: number;
+    dailyLimit?: number;
+    dailyUsed?: number;
+    monthlyLimit?: number;
+    monthlyUsed?: number;
+    expiresAt?: string;
+}
+export interface SubscriptionValidityResult {
+    allowed: boolean;
+    response?: LimitViolationResponse;
+}
 
 export interface QuotaCheckResult {
     allowed: boolean;
@@ -76,36 +100,127 @@ export interface QuotaInfo {
     monthlyUsed: number;
 }
 
-function isQuotaSchemaMissingError(error: unknown) {
-    if (!error || typeof error !== 'object') {
-        return false;
-    }
+const PRICING_UPGRADE_URL = '/pricing';
+const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_SUBSCRIPTION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
-    const record = error as { code?: unknown; message?: unknown };
-    if (record.code === 'P2021' || record.code === 'P2022') {
-        return true;
-    }
-
-    if (typeof record.message !== 'string') {
-        return false;
-    }
-
-    const message = record.message.toLowerCase();
-    const referencesQuotaTable = (
-        message.includes('subscriptionplan') ||
-        message.includes('dailyusage') ||
-        message.includes('usagereport')
-    );
-
-    return referencesQuotaTable && (
-        message.includes('does not exist') ||
-        message.includes('does not exist in the current database')
-    );
+function buildQuotaLimitExceededResponse(input: {
+    reason: 'daily_limit_exceeded' | 'monthly_limit_exceeded';
+    message: string;
+    estimated?: number;
+    remaining: number;
+    dailyLimit?: number;
+    dailyUsed?: number;
+    monthlyLimit?: number;
+    monthlyUsed?: number;
+}): LimitViolationResponse {
+    return {
+        error: 'quota_limit_exceeded',
+        reason: input.reason,
+        message: input.message,
+        upgradeUrl: PRICING_UPGRADE_URL,
+        estimated: input.estimated,
+        remaining: input.remaining,
+        dailyLimit: input.dailyLimit,
+        dailyUsed: input.dailyUsed,
+        monthlyLimit: input.monthlyLimit,
+        monthlyUsed: input.monthlyUsed,
+    };
 }
 
-function logQuotaSchemaFallback(operation: string, error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    log({ module: 'quota', level: 'warn', operation }, `Quota storage unavailable, skipping quota enforcement: ${message}`);
+function buildValidityCheckFailedResponse(input: {
+    reason: 'trial_expired' | 'subscription_inactive' | 'subscription_expired';
+    message: string;
+    expiresAt?: Date;
+}): LimitViolationResponse {
+    return {
+        error: 'validity_check_failed',
+        reason: input.reason,
+        message: input.message,
+        upgradeUrl: PRICING_UPGRADE_URL,
+        expiresAt: input.expiresAt?.toISOString(),
+    };
+}
+
+export function getQuotaLimitExceededResponse(input: {
+    reason: 'daily_limit_exceeded' | 'monthly_limit_exceeded';
+    estimated?: number;
+    quota: QuotaInfo;
+}): LimitViolationResponse {
+    if (input.reason === 'daily_limit_exceeded') {
+        return buildQuotaLimitExceededResponse({
+            reason: input.reason,
+            message: '今日额度不足，请升级后继续发送消息',
+            estimated: input.estimated,
+            remaining: input.quota.dailyRemaining,
+            dailyLimit: input.quota.dailyLimit,
+            dailyUsed: input.quota.dailyUsed,
+        });
+    }
+
+    return buildQuotaLimitExceededResponse({
+        reason: input.reason,
+        message: '本月额度不足，请升级后继续发送消息',
+        estimated: input.estimated,
+        remaining: input.quota.monthlyRemaining,
+        monthlyLimit: input.quota.monthlyLimit,
+        monthlyUsed: input.quota.monthlyUsed,
+    });
+}
+
+export async function checkSubscriptionValidity(userId: string): Promise<SubscriptionValidityResult> {
+    const account = await db.account.findUnique({
+        where: { id: userId },
+        select: { createdAt: true }
+    });
+
+    if (!account) {
+        throw new Error(`Account not found for user ${userId}`);
+    }
+
+    const subscription = await db.subscriptionPlan.findUnique({
+        where: { accountId: userId },
+    });
+
+    if (!subscription) {
+        const expiresAt = new Date(account.createdAt.getTime() + TRIAL_DURATION_MS);
+        if (Date.now() > expiresAt.getTime()) {
+            return {
+                allowed: false,
+                response: buildValidityCheckFailedResponse({
+                    reason: 'trial_expired',
+                    message: '7 天试用已到期，请升级后继续发送消息',
+                    expiresAt,
+                })
+            };
+        }
+        return { allowed: true };
+    }
+
+    if (subscription.tier === 'free' || subscription.status !== 'active') {
+        return {
+            allowed: false,
+            response: buildValidityCheckFailedResponse({
+                reason: 'subscription_inactive',
+                message: '当前订阅未激活，请升级或恢复订阅后继续发送消息',
+                expiresAt: subscription.endDate ?? undefined,
+            })
+        };
+    }
+
+    const expiresAt = subscription.endDate ?? new Date(subscription.startDate.getTime() + DEFAULT_SUBSCRIPTION_DURATION_MS);
+    if (Date.now() > expiresAt.getTime()) {
+        return {
+            allowed: false,
+            response: buildValidityCheckFailedResponse({
+                reason: 'subscription_expired',
+                message: '当前订阅已过期，请续费后继续发送消息',
+                expiresAt,
+            })
+        };
+    }
+
+    return { allowed: true };
 }
 
 export async function tokenQuotaMiddleware(
@@ -126,25 +241,17 @@ export async function tokenQuotaMiddleware(
         }
 
         if (quota.dailyUsed >= quota.dailyLimit) {
-            return reply.code(429).send({
-                error: 'daily_limit_exceeded',
-                message: '今日免费额度已用完，明日 0 点重置',
-                currentUsage: {
-                    dailyTokens: quota.dailyUsed,
-                    dailyLimit: quota.dailyLimit,
-                },
-            });
+            return reply.code(429).send(getQuotaLimitExceededResponse({
+                reason: 'daily_limit_exceeded',
+                quota,
+            }));
         }
 
         if (quota.monthlyUsed >= quota.monthlyLimit) {
-            return reply.code(429).send({
-                error: 'monthly_limit_exceeded',
-                message: '本月免费额度已用完，下月 1 号重置',
-                currentUsage: {
-                    monthlyTokens: quota.monthlyUsed,
-                    monthlyLimit: quota.monthlyLimit,
-                },
-            });
+            return reply.code(429).send(getQuotaLimitExceededResponse({
+                reason: 'monthly_limit_exceeded',
+                quota,
+            }));
         }
 
         (request as any).quota = quota;
@@ -168,119 +275,103 @@ export async function updateUsage(
 ): Promise<void> {
     const today = new Date().toISOString().split('T')[0];
 
-    try {
-        await db.dailyUsage.upsert({
-            where: {
-                accountId_date: {
-                    accountId: userId,
-                    date: today,
-                },
-            },
-            update: {
-                tokensUsed: { increment: tokensUsed },
-                requests: { increment: 1 },
-            },
-            create: {
+    await db.dailyUsage.upsert({
+        where: {
+            accountId_date: {
                 accountId: userId,
                 date: today,
-                tokensUsed,
-                requests: 1,
             },
-        });
+        },
+        update: {
+            tokensUsed: { increment: tokensUsed },
+            requests: { increment: 1 },
+        },
+        create: {
+            accountId: userId,
+            date: today,
+            tokensUsed,
+            requests: 1,
+        },
+    });
 
-        if (sessionId) {
-            const usageKey = `session:${sessionId}:${today}`;
-            await db.usageReport.upsert({
-                where: {
-                    accountId_sessionId_key: {
-                        accountId: userId,
-                        sessionId,
-                        key: usageKey,
-                    },
-                },
-                update: {
-                    data: {
-                        tokens: { total: tokensUsed },
-                        cost: { total: 0 },
-                    },
-                },
-                create: {
+    if (sessionId) {
+        const usageKey = `session:${sessionId}:${today}`;
+        await db.usageReport.upsert({
+            where: {
+                accountId_sessionId_key: {
                     accountId: userId,
                     sessionId,
                     key: usageKey,
-                    data: {
-                        tokens: { total: tokensUsed },
-                        cost: { total: 0 },
-                    },
                 },
-            });
-        }
-    } catch (error) {
-        if (isQuotaSchemaMissingError(error)) {
-            logQuotaSchemaFallback('updateUsage', error);
-            return;
-        }
-        throw error;
+            },
+            update: {
+                data: {
+                    tokens: { total: tokensUsed },
+                    cost: { total: 0 },
+                },
+            },
+            create: {
+                accountId: userId,
+                sessionId,
+                key: usageKey,
+                data: {
+                    tokens: { total: tokensUsed },
+                    cost: { total: 0 },
+                },
+            },
+        });
     }
 }
 
 export async function getUserQuota(userId: string): Promise<QuotaInfo | null> {
-    try {
-        const subscription = await db.subscriptionPlan.findUnique({
-            where: { accountId: userId },
-        });
+    const subscription = await db.subscriptionPlan.findUnique({
+        where: { accountId: userId },
+    });
 
-        const tier: QuotaTier = (subscription?.tier as QuotaTier) || 'free';
-        const quota = QUOTA_TIERS[tier];
+    const tier: QuotaTier = (subscription?.tier as QuotaTier) || 'free';
+    const quota = QUOTA_TIERS[tier];
 
-        if (!quota) {
-            return null;
-        }
-
-        const today = new Date().toISOString().split('T')[0];
-        const dailyUsage = await db.dailyUsage.findUnique({
-            where: {
-                accountId_date: {
-                    accountId: userId,
-                    date: today,
-                },
-            },
-        });
-
-        const firstDayOfMonth = new Date().toISOString().slice(0, 7) + '-01';
-        const monthlyUsageResult = await db.dailyUsage.groupBy({
-            by: ['accountId'],
-            where: {
-                accountId: userId,
-                date: {
-                    gte: firstDayOfMonth,
-                },
-            },
-            _sum: {
-                tokensUsed: true,
-            },
-        });
-
-        const dailyTokens = dailyUsage?.tokensUsed || 0;
-        const monthlyTokens = monthlyUsageResult[0]?._sum.tokensUsed || 0;
-
-        return {
-            tier,
-            dailyLimit: quota.dailyLimit,
-            monthlyLimit: quota.monthlyLimit,
-            rateLimit: quota.rateLimit,
-            dailyUsed: dailyTokens,
-            monthlyUsed: monthlyTokens,
-            dailyRemaining: quota.dailyLimit - dailyTokens,
-            monthlyRemaining: quota.monthlyLimit - monthlyTokens,
-        };
-    } catch (error) {
-        if (isQuotaSchemaMissingError(error)) {
-            logQuotaSchemaFallback('getUserQuota', error);
-            return null;
-        }
-        throw error;
+    if (!quota) {
+        return null;
     }
+
+    const today = new Date().toISOString().split('T')[0];
+    const dailyUsage = await db.dailyUsage.findUnique({
+        where: {
+            accountId_date: {
+                accountId: userId,
+                date: today,
+            },
+        },
+    });
+
+    const firstDayOfMonth = new Date().toISOString().slice(0, 7) + '-01';
+    const monthlyUsageResult = await db.dailyUsage.groupBy({
+        by: ['accountId'],
+        where: {
+            accountId: userId,
+            date: {
+                gte: firstDayOfMonth,
+            },
+        },
+        _sum: {
+            tokensUsed: true,
+        },
+    });
+
+    const dailyTokens = dailyUsage?.tokensUsed || 0;
+    const monthlyTokens = monthlyUsageResult[0]?._sum.tokensUsed || 0;
+
+    return {
+        tier,
+        dailyLimit: quota.dailyLimit,
+        monthlyLimit: quota.monthlyLimit,
+        rateLimit: quota.rateLimit,
+        dailyUsed: dailyTokens,
+        monthlyUsed: monthlyTokens,
+        dailyRemaining: quota.dailyLimit - dailyTokens,
+        monthlyRemaining: quota.monthlyLimit - monthlyTokens,
+    };
 }
 
 /**

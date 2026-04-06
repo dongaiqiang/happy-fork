@@ -21,6 +21,7 @@ import { enableAuthentication } from "./utils/enableAuthentication";
 import { userRoutes } from "./routes/userRoutes";
 import { feedRoutes } from "./routes/feedRoutes";
 import { kvRoutes } from "./routes/kvRoutes";
+import { quotaRoutes } from "./routes/quotaRoutes";
 import { v3SessionRoutes } from "./routes/v3SessionRoutes";
 import { isLocalStorage, getLocalFilesDir } from "@/storage/files";
 import * as path from "path";
@@ -89,6 +90,7 @@ export async function startApi() {
     userRoutes(typed);
     feedRoutes(typed);
     kvRoutes(typed);
+    quotaRoutes(typed);
     v3SessionRoutes(typed);
 
     // Start HTTP 
