@@ -9,7 +9,8 @@ describe('normalizeMessageSendFailure', () => {
             message: '今日额度不足，请升级后继续发送消息'
         }, 'session-1')).toEqual({
             shouldStopRetry: true,
-            reasonText: '今日额度不足，请升级后继续发送消息'
+            reasonText: '今日额度不足，请升级后继续发送消息',
+            shouldRefreshSessions: false
         });
     });
 
@@ -20,7 +21,28 @@ describe('normalizeMessageSendFailure', () => {
             message: '7 天试用已到期，请升级后继续发送消息'
         }, 'session-1')).toEqual({
             shouldStopRetry: true,
-            reasonText: '7 天试用已到期，请升级后继续发送消息'
+            reasonText: '7 天试用已到期，请升级后继续发送消息',
+            shouldRefreshSessions: false
+        });
+    });
+
+    it('stops retrying and refreshes sessions when mobile is not the controller', () => {
+        expect(normalizeMessageSendFailure(409, {
+            error: 'mobile-controller-required',
+        }, 'session-1')).toEqual({
+            shouldStopRetry: true,
+            reasonText: 'This session is currently controlled by Mac. Switch it back to mobile before sending more messages.',
+            shouldRefreshSessions: true
+        });
+    });
+
+    it('stops retrying and refreshes sessions while controller handoff is switching', () => {
+        expect(normalizeMessageSendFailure(409, {
+            error: 'switching-in-progress',
+        }, 'session-1')).toEqual({
+            shouldStopRetry: true,
+            reasonText: 'This session is currently switching control. Wait a moment and try again.',
+            shouldRefreshSessions: true
         });
     });
 
@@ -29,7 +51,8 @@ describe('normalizeMessageSendFailure', () => {
             error: 'internal_error'
         }, 'session-1')).toEqual({
             shouldStopRetry: false,
-            reasonText: 'Failed to send messages for session-1: 500'
+            reasonText: 'Failed to send messages for session-1: 500',
+            shouldRefreshSessions: false
         });
     });
 });

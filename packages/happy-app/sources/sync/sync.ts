@@ -1605,6 +1605,9 @@ class Sync {
                 if (failure.shouldStopRetry) {
                     pending.splice(0, batch.length);
                     nonRetryableFailureText = failure.reasonText;
+                    if (failure.shouldRefreshSessions) {
+                        this.sessionsSync.invalidate();
+                    }
                 } else {
                     throw new Error(failure.reasonText);
                 }
