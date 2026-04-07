@@ -99,7 +99,7 @@ export async function runCodex(opts: {
     let machineId = settings?.machineId;
     const sandboxConfig = opts.noSandbox ? undefined : settings?.sandboxConfig;
     if (!machineId) {
-        console.error(`[START] No machine ID found in settings, which is unexpected since authAndSetupMachineIfNeeded should have created it. Please report this issue on https://github.com/slopus/happy-cli/issues`);
+        console.error('HelloVibe could not find this computer\'s local setup. Run "happy auth login --force" and try again. If it still fails, report it at https://github.com/dongaiqiang/hellovibe/issues');
         process.exit(1);
     }
     logger.debug(`Using machineId: ${machineId}`);

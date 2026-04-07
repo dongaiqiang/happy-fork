@@ -53,7 +53,25 @@ describe('happy CLI entrypoint', () => {
     const result = runCli(['daemon', 'start'])
 
     expect(result.exitCode).toBe(1)
-    expect(result.stderr).toContain('Not authenticated. Run "happy auth login" to authenticate before starting the daemon.')
+    expect(result.stderr).toContain('HelloVibe is not signed in on this computer yet.')
+    expect(result.stderr).toContain('Run "happy auth login" first, then run "happy daemon start" again.')
     expect(result.stdout).not.toContain('Mobile Authentication')
+  })
+
+  it('shows updated auth help with HelloVibe sign-in guidance', () => {
+    const result = runCli(['auth', '--help'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('Sign in to HelloVibe on this computer')
+    expect(result.stdout).toContain('managed from the mobile or web app instead of the CLI')
+  })
+
+  it('shows daemon help as background service guidance', () => {
+    const result = runCli(['daemon'])
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('Background service management')
+    expect(result.stdout).toContain('keeps remote sessions available when you step away from your computer')
+    expect(result.stdout).toContain('happy daemon logs')
   })
 })

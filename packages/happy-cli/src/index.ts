@@ -31,6 +31,18 @@ import { claudeCliPath } from './claude/claudeLocal'
 import { execFileSync } from 'node:child_process'
 import { extractNoSandboxFlag } from './utils/sandboxFlags'
 
+function printCommandError(commandLabel: string, error: unknown, suggestions: string[] = []) {
+  const message = error instanceof Error ? error.message : 'Unknown error'
+  const hintLines = suggestions.length > 0 ? suggestions : ['Run "happy doctor" for diagnostics.']
+  console.error(chalk.red(`${commandLabel} failed:`), message)
+  hintLines.forEach((hint) => {
+    console.error(chalk.gray(`  ${hint}`))
+  })
+  if (process.env.DEBUG) {
+    console.error(error)
+  }
+}
+
 
 (async () => {
   const args = process.argv.slice(2)
@@ -60,26 +72,24 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
     await runDoctorCommand();
     return;
   } else if (subcommand === 'auth') {
-    // Handle auth subcommands
     try {
       await handleAuthCommand(args.slice(1));
     } catch (error) {
-      console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
-      if (process.env.DEBUG) {
-        console.error(error)
-      }
+      printCommandError('Authentication command', error, [
+        'Run "happy auth --help" to review available sign-in commands.',
+        'Run "happy doctor" if sign-in still does not work.'
+      ])
       process.exit(1)
     }
     return;
   } else if (subcommand === 'connect') {
-    // Handle connect subcommands
     try {
       await handleConnectCommand(args.slice(1));
     } catch (error) {
-      console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
-      if (process.env.DEBUG) {
-        console.error(error)
-      }
+      printCommandError('Connect command', error, [
+        'Run "happy connect --help" to review available provider commands.',
+        'Run "happy doctor" if the problem continues.'
+      ])
       process.exit(1)
     }
     return;
@@ -87,10 +97,10 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
     try {
       await handleSandboxCommand(args.slice(1));
     } catch (error) {
-      console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
-      if (process.env.DEBUG) {
-        console.error(error)
-      }
+      printCommandError('Sandbox command', error, [
+        'Run "happy sandbox --help" to review sandbox options.',
+        'Run "happy doctor" if the sandbox still fails to start.'
+      ])
       process.exit(1)
     }
     return;
@@ -115,12 +125,11 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
         credentials
       } = await authAndSetupMachineIfNeeded();
       await runCodex({credentials, startedBy, noSandbox: codexArgs.noSandbox});
-      // Do not force exit here; allow instrumentation to show lingering handles
     } catch (error) {
-      console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
-      if (process.env.DEBUG) {
-        console.error(error)
-      }
+      printCommandError('Codex session', error, [
+        'Run "happy auth login" if this computer is not signed in yet.',
+        'Run "happy doctor" if the session still cannot start.'
+      ])
       process.exit(1)
     }
     return;
@@ -335,10 +344,10 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
 
       await runGemini({credentials, startedBy});
     } catch (error) {
-      console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
-      if (process.env.DEBUG) {
-        console.error(error)
-      }
+      printCommandError('Gemini session', error, [
+        'Run "happy connect gemini" if your Google account is not linked yet.',
+        'Run "happy doctor" if the session still cannot start.'
+      ])
       process.exit(1)
     }
     return;
@@ -389,10 +398,10 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
         args: resolved.args,
       });
     } catch (error) {
-      console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
-      if (process.env.DEBUG) {
-        console.error(error)
-      }
+      printCommandError('ACP session', error, [
+        'Check the command you passed after "happy acp --".',
+        'Run "happy doctor" if the runner still fails.'
+      ])
       process.exit(1)
     }
     return;
@@ -402,10 +411,9 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
     try {
       await handleAuthCommand(['logout']);
     } catch (error) {
-      console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
-      if (process.env.DEBUG) {
-        console.error(error)
-      }
+      printCommandError('Logout command', error, [
+        'Run "happy auth status" to confirm the current sign-in state.'
+      ])
       process.exit(1)
     }
     return;
@@ -414,10 +422,9 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
     try {
       await handleNotifyCommand(args.slice(1));
     } catch (error) {
-      console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
-      if (process.env.DEBUG) {
-        console.error(error)
-      }
+      printCommandError('Notification command', error, [
+        'Run "happy notify --help" to review the required arguments.'
+      ])
       process.exit(1)
     }
     return;
@@ -458,7 +465,7 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
     } else if (daemonSubcommand === 'start') {
       const credentials = await readCredentials()
       if (!credentials) {
-        console.error('Not authenticated. Run "happy auth login" to authenticate before starting the daemon.')
+        console.error('HelloVibe is not signed in on this computer yet. Run "happy auth login" first, then run "happy daemon start" again.')
         process.exit(1)
       }
 
@@ -481,9 +488,11 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
       }
 
       if (started) {
-        console.log('Daemon started successfully');
+        console.log('HelloVibe background service is ready.');
+        console.log('You can now run "happy" to start a session, or "happy daemon status" to inspect the service.');
       } else {
-        console.error('Failed to start daemon');
+        console.error('HelloVibe could not confirm that the background service started.');
+        console.error('Run "happy daemon logs" to check the latest log, or run "happy doctor" for a broader diagnosis.');
         process.exit(1);
       }
       process.exit(0);
@@ -492,7 +501,10 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
         await startDaemon()
         process.exit(0)
       } catch (error) {
-        console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
+        printCommandError('Background service', error, [
+          'Run "happy auth login" if this computer is not signed in yet.',
+          'Run "happy daemon logs" or "happy doctor" for more details.'
+        ])
         process.exit(1)
       }
     } else if (daemonSubcommand === 'stop') {
@@ -515,30 +527,35 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
       try {
         await install()
       } catch (error) {
-        console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
+        printCommandError('Background service install', error, [
+          'Run "happy doctor" to verify platform support and local paths.'
+        ])
         process.exit(1)
       }
     } else if (daemonSubcommand === 'uninstall') {
       try {
         await uninstall()
       } catch (error) {
-        console.error(chalk.red('Error:'), error instanceof Error ? error.message : 'Unknown error')
+        printCommandError('Background service uninstall', error, [
+          'Run "happy doctor" if cleanup still looks incomplete.'
+        ])
         process.exit(1)
       }
     } else {
       console.log(`
-${chalk.bold('happy daemon')} - Daemon management
+${chalk.bold('happy daemon')} - Background service management
 
 ${chalk.bold('Usage:')}
-  happy daemon start              Start the daemon (detached)
-  happy daemon stop               Stop the daemon (sessions stay alive)
-  happy daemon status             Show daemon status
+  happy daemon start              Start the background service (detached)
+  happy daemon stop               Stop the background service (sessions stay alive)
+  happy daemon status             Show background service status
   happy daemon list               List active sessions
+  happy daemon logs               Show the latest background service log path
 
-  If you want to kill all happy related processes run 
+  If you want to clean up all HelloVibe-related processes run 
   ${chalk.cyan('happy doctor clean')}
 
-${chalk.bold('Note:')} The daemon runs in the background and manages Claude sessions.
+${chalk.bold('Note:')} The background service keeps remote sessions available when you step away from your computer.
 
 ${chalk.bold('To clean up runaway processes:')} Use ${chalk.cyan('happy doctor clean')}
 `)

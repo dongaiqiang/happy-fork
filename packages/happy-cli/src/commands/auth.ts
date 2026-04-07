@@ -35,20 +35,20 @@ export async function handleAuthCommand(args: string[]): Promise<void> {
 
 function showAuthHelp(): void {
   console.log(`
-${chalk.bold('happy auth')} - Authentication management
+${chalk.bold('happy auth')} - Sign in and device access
 
 ${chalk.bold('Usage:')}
-  happy auth login [--force]    Authenticate with Happy
-  happy auth logout             Remove authentication and machine data
-  happy auth status             Show authentication status
+  happy auth login [--force]    Sign in to HelloVibe on this computer
+  happy auth logout             Remove sign-in and local machine data
+  happy auth status             Show current sign-in status
   happy auth help               Show this help message
 
 ${chalk.bold('Options:')}
-  --force    Clear credentials, machine ID, and stop daemon before re-auth
+  --force    Clear credentials, machine ID, and stop the background service before signing in again
 
-${chalk.gray('PS: Your master secret never leaves your mobile/web device. Each CLI machine')}
-${chalk.gray('receives only a derived key for per-machine encryption, so backup codes')}
-${chalk.gray('cannot be displayed from the CLI.')}
+${chalk.gray('HelloVibe keeps the sensitive part of your sign-in on your mobile or web device.')}
+${chalk.gray('This computer stores only the local access it needs, so backup and recovery steps')}
+${chalk.gray('are managed from the mobile or web app instead of the CLI.')}
 `);
 }
 
@@ -61,14 +61,14 @@ async function handleAuthLogin(args: string[]): Promise<void> {
     console.log(chalk.gray('This will:'));
     console.log(chalk.gray('  • Clear existing credentials'));
     console.log(chalk.gray('  • Clear machine ID'));
-    console.log(chalk.gray('  • Stop daemon if running'));
-    console.log(chalk.gray('  • Re-authenticate and register machine\n'));
+    console.log(chalk.gray('  • Stop the background service if it is running'));
+    console.log(chalk.gray('  • Sign in again and register this machine\n'));
 
     // Stop daemon if running
     try {
       logger.debug('Stopping daemon for force auth...');
       await stopDaemon();
-      console.log(chalk.gray('✓ Stopped daemon'));
+      console.log(chalk.gray('✓ Stopped the background service'));
     } catch (error) {
       logger.debug('Daemon was not running or failed to stop:', error);
     }
@@ -108,6 +108,8 @@ async function handleAuthLogin(args: string[]): Promise<void> {
     const result = await authAndSetupMachineIfNeeded();
     console.log(chalk.green('\n✓ Authentication successful'));
     console.log(chalk.gray(`  Machine ID: ${result.machineId}`));
+    console.log(chalk.gray('  Next step: run "happy" to start your first session'));
+    console.log(chalk.gray('  Optional: run "happy daemon start" if you want remote sessions to stay ready in the background'));
   } catch (error) {
     console.error(chalk.red('Authentication failed:'), error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
@@ -145,7 +147,7 @@ async function handleAuthLogout(): Promise<void> {
       // Stop daemon if running
       try {
         await stopDaemon();
-        console.log(chalk.gray('Stopped daemon'));
+        console.log(chalk.gray('Stopped the background service'));
       } catch { }
 
       // Remove entire happy directory (as current logout does)
@@ -171,7 +173,7 @@ async function handleAuthStatus(): Promise<void> {
 
   if (!credentials) {
     console.log(chalk.red('✗ Not authenticated'));
-    console.log(chalk.gray('  Run "happy auth login" to authenticate'));
+    console.log(chalk.gray('  Run "happy auth login" to sign in'));
     return;
   }
 
@@ -198,11 +200,12 @@ async function handleAuthStatus(): Promise<void> {
   try {
     const running = await checkIfDaemonRunningAndCleanupStaleState();
     if (running) {
-      console.log(chalk.green('✓ Daemon running'));
+      console.log(chalk.green('✓ Background service running'));
     } else {
-      console.log(chalk.gray('✗ Daemon not running'));
+      console.log(chalk.gray('✗ Background service not running'));
+      console.log(chalk.gray('  Run "happy daemon start" if you want sessions to stay available when you step away'));
     }
   } catch {
-    console.log(chalk.gray('✗ Daemon not running'));
+    console.log(chalk.gray('✗ Background service not running'));
   }
 }

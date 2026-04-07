@@ -1,13 +1,13 @@
 {
   "name": "happy-coder",
   "version": "0.14.0-0",
-  "description": "Mobile and Web client for Claude Code and Codex",
+  "description": "HelloVibe CLI for mobile-assisted AI coding with Claude, Gemini, and Codex",
   "author": "Kirill Dubovitskiy",
   "license": "MIT",
   "type": "module",
-  "homepage": "https://github.com/slopus/happy-cli",
-  "bugs": "https://github.com/slopus/happy-cli/issues",
-  "repository": "slopus/happy-cli",
+  "homepage": "https://github.com/dongaiqiang/hellovibe",
+  "bugs": "https://github.com/dongaiqiang/hellovibe/issues",
+  "repository": "dongaiqiang/hellovibe",
   "bin": {
     "happy": "./bin/happy.mjs",
     "happy-mcp": "./bin/happy-mcp.mjs"

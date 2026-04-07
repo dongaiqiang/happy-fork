@@ -261,8 +261,8 @@ export async function runDoctorCommand(filter?: 'all' | 'daemon'): Promise<void>
 
         // Support and bug reports
         console.log(chalk.bold('\n🐛 Support & Bug Reports'));
-        console.log(`Report issues: ${chalk.blue('https://github.com/slopus/happy-cli/issues')}`);
-        console.log(`Documentation: ${chalk.blue('https://happy.engineering/')}`);
+        console.log(`Report issues: ${chalk.blue('https://github.com/dongaiqiang/hellovibe/issues')}`);
+        console.log(`Documentation: ${chalk.blue('https://github.com/dongaiqiang/hellovibe/tree/main/docs')}`);
     }
 
     console.log(chalk.green('\n✅ Doctor diagnosis complete!\n'));

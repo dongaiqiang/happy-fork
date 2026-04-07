@@ -1,14 +1,29 @@
-# Happy
+# HelloVibe
 
 Code on the go — control AI coding agents from your mobile device.
 
-Free. Open source. Code anywhere.
+Free. Open source. Start fast from your phone or Mac.
 
 ## Installation
 
 ```bash
 npm install -g happy-coder
 ```
+
+## Quick Start
+
+```bash
+happy auth login
+happy
+```
+
+If you want sessions to stay available when you step away from your computer, start the background service once:
+
+```bash
+happy daemon start
+```
+
+After installation you can also run `happy --help` for a quick command overview or `happy doctor` if setup looks wrong.
 
 ## Run From Source
 
@@ -32,8 +47,8 @@ happy
 
 This will:
 1. Start a Claude Code session
-2. Display a QR code to connect from your mobile device
-3. Allow real-time session sharing between Claude Code and your mobile app
+2. Show a QR code so you can link from your mobile device
+3. Keep the session available in HelloVibe on mobile
 
 ### Gemini
 
@@ -45,7 +60,7 @@ Start a Gemini CLI session with remote control capabilities.
 
 **First time setup:**
 ```bash
-# Authenticate with Google
+# Connect your Google account
 happy connect gemini
 ```
 
@@ -60,11 +75,11 @@ happy connect gemini
 
 ### Utility Commands
 
-- `happy auth` – Manage authentication
-- `happy connect` – Store AI vendor API keys in Happy cloud
+- `happy auth` – Manage sign-in for this computer
+- `happy connect` – Store AI vendor API keys in your HelloVibe account
 - `happy sandbox` – Configure sandbox runtime restrictions
 - `happy notify` – Send a push notification to your devices
-- `happy daemon` – Manage background service
+- `happy daemon` – Manage the background service used for remote sessions
 - `happy doctor` – System diagnostics & troubleshooting
 
 ### Connect Subcommands
@@ -122,11 +137,11 @@ happy sandbox disable    # Disable sandboxing
 
 ## Environment Variables
 
-### Happy Configuration
+### HelloVibe Configuration
 
-- `HAPPY_SERVER_URL` - Custom server URL (default: https://api.cluster-fluster.com)
+- `HAPPY_SERVER_URL` - Custom server URL (default: https://api.easycode-ai.xyz)
 - `HAPPY_WEBAPP_URL` - Custom web app URL (default: https://app.happy.engineering)
-- `HAPPY_HOME_DIR` - Custom home directory for Happy data (default: ~/.happy)
+- `HAPPY_HOME_DIR` - Custom home directory for HelloVibe data (default: ~/.happy)
 - `HAPPY_DISABLE_CAFFEINATE` - Disable macOS sleep prevention (set to `true`, `1`, or `yes`)
 - `HAPPY_EXPERIMENTAL` - Enable experimental features (set to `true`, `1`, or `yes`)
 
@@ -181,6 +196,12 @@ Interested in contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for developme
 
 - Gemini CLI installed (`npm install -g @google/gemini-cli`)
 - Google account authenticated via `happy connect gemini`
+
+## Next Steps
+
+- Start your first session with `happy`
+- Run `happy daemon start` if you want remote sessions to stay ready in the background
+- Run `happy doctor` if authentication, linking, or startup looks off
 
 ## License
 

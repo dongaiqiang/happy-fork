@@ -53,6 +53,22 @@ function listBundledArchivePlatforms(archivesDir) {
         .sort();
 }
 
+function formatBundledPlatforms(bundledPlatforms) {
+    return bundledPlatforms.join(', ') || 'none';
+}
+
+function printNextSteps() {
+    console.log('Next steps: run "happy auth login" to sign in, then run "happy" to start your first session.');
+    console.log('If something looks wrong after install, run "happy doctor" for diagnostics.');
+}
+
+function warnUnsupportedPlatform(targetPlatform, bundledPlatforms) {
+    console.warn(`HelloVibe does not include bundled tools for ${targetPlatform}.`);
+    console.warn(`Bundled platforms in this package: ${formatBundledPlatforms(bundledPlatforms)}.`);
+    console.warn('Installation can continue, but advanced local tooling may be unavailable on this platform.');
+    console.warn('You can still run "happy --help" and sign in. If you need full support, report your platform at https://github.com/dongaiqiang/hellovibe/issues.');
+}
+
 /**
  * Check if tools are already unpacked for current platform
  */
@@ -119,15 +135,27 @@ async function unpackArchive(archivePath, destDir) {
  */
 async function unpackTools() {
     try {
-        const platformDir = getPlatformDir();
         const toolsDir = getToolsDir();
         const archivesDir = path.join(toolsDir, 'archives');
         const unpackedPath = path.join(toolsDir, 'unpacked');
         const bundledPlatforms = listBundledArchivePlatforms(archivesDir);
+        let platformDir;
+        try {
+            platformDir = getPlatformDir();
+        } catch (error) {
+            warnUnsupportedPlatform(`${os.arch()}-${os.platform()}`, bundledPlatforms);
+            return { success: false, skipped: true, reason: 'unsupported-platform' };
+        }
+
+        if (!bundledPlatforms.includes(platformDir)) {
+            warnUnsupportedPlatform(platformDir, bundledPlatforms);
+            return { success: false, skipped: true, reason: 'missing-platform-archive' };
+        }
         
         // Check if already unpacked
         if (areToolsUnpacked(toolsDir)) {
             console.log(`Tools already unpacked for ${platformDir}`);
+            printNextSteps();
             return { success: true, alreadyUnpacked: true };
         }
         
@@ -141,22 +169,24 @@ async function unpackTools() {
         // Unpack difftastic
         const difftasticArchive = path.join(archivesDir, `difftastic-${platformDir}.tar.gz`);
         if (!fs.existsSync(difftasticArchive)) {
-            throw new Error(`Missing bundled archive for ${platformDir}. Available bundled platforms: ${bundledPlatforms.join(', ') || 'none'}`);
+            throw new Error(`HelloVibe package is missing the bundled difftastic archive for ${platformDir}. Bundled platforms: ${formatBundledPlatforms(bundledPlatforms)}.`);
         }
         await unpackArchive(difftasticArchive, unpackedPath);
         
         // Unpack ripgrep
         const ripgrepArchive = path.join(archivesDir, `ripgrep-${platformDir}.tar.gz`);
         if (!fs.existsSync(ripgrepArchive)) {
-            throw new Error(`Missing bundled archive for ${platformDir}. Available bundled platforms: ${bundledPlatforms.join(', ') || 'none'}`);
+            throw new Error(`HelloVibe package is missing the bundled ripgrep archive for ${platformDir}. Bundled platforms: ${formatBundledPlatforms(bundledPlatforms)}.`);
         }
         await unpackArchive(ripgrepArchive, unpackedPath);
         
         console.log(`Tools unpacked successfully to ${unpackedPath}`);
+        printNextSteps();
         return { success: true, alreadyUnpacked: false };
         
     } catch (error) {
-        console.error('Failed to unpack tools:', error.message);
+        console.error(`HelloVibe could not finish preparing local tools: ${error.message}`);
+        console.error('Try reinstalling the package. If the problem continues, run "happy doctor" after install and report it at https://github.com/dongaiqiang/hellovibe/issues.');
         throw error;
     }
 }
