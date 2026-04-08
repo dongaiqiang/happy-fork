@@ -1,0 +1,25 @@
+- 回复 Agent：Trae-主线执行位
+- 回复任务：2026-04-08-Trae-Main-HV-006-管理员查询quota与subscription
+- 工单号：`HV-006` / `HV-006-TRAE-MAIN-02`
+- 详情如下：
+- 任务名称：2026-04-08-Trae-Main-HV-006-管理员查询quota与subscription
+- 工作目录：`/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main`
+- 结果概述：已将管理员查询 quota / subscription 收口为“标准 `/admin/account-quota` 网络入口 + 最小内部脚本入口”，并完成真实查询结果与数据库对照验证。
+- 修改文件：
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/quota/adminAccountQuota.ts`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/quotaRoutes.ts`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/adminAccountQuota.ts`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/package.json`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/quotaRoutes.test.ts`
+- 交付文件：
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/执行记录/HV-006-2026-04-08-Trae-Main-管理员查询quota与subscription工作日志.md`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/测试结果/HV-006-2026-04-08-Trae-Main-管理员查询quota与subscription验证结果.md`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/评审/HV-006-2026-04-08-Trae-Main-管理员查询quota与subscription结论.md`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/执行记录/HV-006-2026-04-08-Trae-Main-管理员查询quota与subscription派单回报.md`
+- 查询承接方式：脚本 + 接口
+- 实施结果：新增共享查询逻辑，补出 `GET /admin/account-quota` admin-only 查询接口，并补出 `yarn workspace happy-server admin:account-quota` 最小内部脚本入口；当前支持按 `accountId` 或 `username` 查询指定账号，并返回 `account`、`subscription`、`quota` 三段信息。
+- 验证结果：`yarn workspace happy-server test sources/app/api/routes/quotaRoutes.test.ts` 通过；`yarn workspace happy-server build` 通过；已用临时账号 `hv006-trae-main-02-account` 真实写入 usage 后执行 `yarn admin:account-quota --account-id hv006-trae-main-02-account`，返回 `dailyUsed=3200`、`monthlyUsed=4400`、`dailyRemaining=96800`、`monthlyRemaining=1995600`，与数据库中的 `SubscriptionPlan` 和 `DailyUsage` 对照一致，随后已清理临时数据。
+- 已提交版本：无
+- 待同步事项：如总管采纳本轮结果，建议将“`/admin/account-quota` + `admin:account-quota`”作为 `HV-006` 第三张单的查询事实基线继续沿用。
+- 风险与阻塞：网络查询入口仍依赖 `ADMIN_TOKEN`；若目标环境未配置则只能走本地脚本入口；除此之外无新增代码阻塞。
+- 是否需要其他目录同步：需要，原因是本轮已形成后续 usage reset 和内部管理页可直接复用的查询基线与管理员使用口径。

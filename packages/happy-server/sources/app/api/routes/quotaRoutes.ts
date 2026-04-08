@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/storage/db";
 import { QUOTA_TIERS, QuotaTier } from "@/app/api/middleware/tokenQuota";
 import { AdminUpgradeInput, AdminUpgradeInputSchema, executeAdminUpgrade } from "@/app/quota/adminUpgrade";
+import { AdminAccountQuotaQuery, AdminAccountQuotaQuerySchema, queryAdminAccountQuota } from "@/app/quota/adminAccountQuota";
 
 const SubscriptionUpgradeBodySchema = z.object({
     tier: z.enum(['student', 'pro', 'team', 'enterprise']),
@@ -17,28 +18,37 @@ const SubscriptionUpgradeBodySchema = z.object({
  * 提供用户配额查询和订阅计划列表接口
  */
 export function quotaRoutes(app: Fastify) {
+    app.get('/admin/account-quota', {
+        schema: {
+            querystring: AdminAccountQuotaQuerySchema,
+        },
+    }, async (request, reply) => {
+        if (!hasValidAdminToken(request, reply)) {
+            return;
+        }
+
+        const quotaSnapshot = await queryAdminAccountQuota(request.query as AdminAccountQuotaQuery);
+        if (!quotaSnapshot) {
+            return reply.code(404).send({
+                success: false,
+                error: 'account_not_found',
+                message: 'Target account was not found',
+            });
+        }
+
+        return reply.send({
+            success: true,
+            ...quotaSnapshot,
+        });
+    });
+
     app.post('/admin/upgrade', {
         schema: {
             body: AdminUpgradeInputSchema,
         },
     }, async (request, reply) => {
-        const adminToken = process.env.ADMIN_TOKEN;
-
-        if (!adminToken) {
-            return reply.code(503).send({
-                success: false,
-                error: 'admin_token_not_configured',
-                message: 'ADMIN_TOKEN is not configured',
-            });
-        }
-
-        const requestToken = getAdminTokenFromRequest(request);
-        if (requestToken !== adminToken) {
-            return reply.code(401).send({
-                success: false,
-                error: 'invalid_admin_token',
-                message: 'Invalid admin token',
-            });
+        if (!hasValidAdminToken(request, reply)) {
+            return;
         }
 
         const upgraded = await executeAdminUpgrade(request.body as AdminUpgradeInput);
@@ -445,4 +455,29 @@ function getAdminTokenFromRequest(request: FastifyRequest): string | null {
     }
 
     return null;
+}
+
+function hasValidAdminToken(request: FastifyRequest, reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } }) {
+    const adminToken = process.env.ADMIN_TOKEN;
+
+    if (!adminToken) {
+        reply.code(503).send({
+            success: false,
+            error: 'admin_token_not_configured',
+            message: 'ADMIN_TOKEN is not configured',
+        });
+        return false;
+    }
+
+    const requestToken = getAdminTokenFromRequest(request);
+    if (requestToken !== adminToken) {
+        reply.code(401).send({
+            success: false,
+            error: 'invalid_admin_token',
+            message: 'Invalid admin token',
+        });
+        return false;
+    }
+
+    return true;
 }
