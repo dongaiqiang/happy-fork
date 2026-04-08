@@ -5,6 +5,7 @@ import { db } from "@/storage/db";
 import { QUOTA_TIERS, QuotaTier } from "@/app/api/middleware/tokenQuota";
 import { AdminUpgradeInput, AdminUpgradeInputSchema, executeAdminUpgrade } from "@/app/quota/adminUpgrade";
 import { AdminAccountQuotaQuery, AdminAccountQuotaQuerySchema, queryAdminAccountQuota } from "@/app/quota/adminAccountQuota";
+import { AdminResetUsageInput, AdminResetUsageInputSchema, executeAdminResetUsage } from "@/app/quota/adminResetUsage";
 
 const SubscriptionUpgradeBodySchema = z.object({
     tier: z.enum(['student', 'pro', 'team', 'enterprise']),
@@ -63,6 +64,30 @@ export function quotaRoutes(app: Fastify) {
         return reply.send({
             success: true,
             ...upgraded,
+        });
+    });
+
+    app.post('/admin/quota/reset-usage', {
+        schema: {
+            body: AdminResetUsageInputSchema,
+        },
+    }, async (request, reply) => {
+        if (!hasValidAdminToken(request, reply)) {
+            return;
+        }
+
+        const resetResult = await executeAdminResetUsage(request.body as AdminResetUsageInput);
+        if (!resetResult) {
+            return reply.code(404).send({
+                success: false,
+                error: 'account_not_found',
+                message: 'Target account was not found',
+            });
+        }
+
+        return reply.send({
+            success: true,
+            ...resetResult,
         });
     });
 

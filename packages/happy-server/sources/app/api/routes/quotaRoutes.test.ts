@@ -124,6 +124,20 @@ const { state, resetState, dbMock } = vi.hoisted(() => {
                 const row = state.dailyUsages.find((item) => item.accountId === target?.accountId && item.date === target?.date);
                 return row ? { ...row } : null;
             }),
+            findMany: vi.fn(async (args: any) => {
+                const rows = state.dailyUsages.filter((item) => {
+                    const where = args?.where ?? {};
+                    const matchesAccount = !where.accountId || item.accountId === where.accountId;
+                    const matchesDate = matchesDateFilter(item.date, where.date);
+                    return matchesAccount && matchesDate;
+                });
+
+                const orderedRows = args?.orderBy?.date === "asc"
+                    ? [...rows].sort((left, right) => left.date.localeCompare(right.date))
+                    : rows;
+
+                return orderedRows.map((row) => selectFields(row as unknown as Record<string, unknown>, args?.select));
+            }),
             groupBy: vi.fn(async (args: any) => {
                 const rows = state.dailyUsages.filter((item) => {
                     const matchesAccount = !args?.where?.accountId || item.accountId === args.where.accountId;
@@ -143,6 +157,19 @@ const { state, resetState, dbMock } = vi.hoisted(() => {
                         tokensUsed,
                     },
                 }];
+            }),
+            deleteMany: vi.fn(async (args: any) => {
+                const before = state.dailyUsages.length;
+                state.dailyUsages = state.dailyUsages.filter((item) => {
+                    const where = args?.where ?? {};
+                    const matchesAccount = !where.accountId || item.accountId === where.accountId;
+                    const matchesDate = matchesDateFilter(item.date, where.date);
+                    return !(matchesAccount && matchesDate);
+                });
+
+                return {
+                    count: before - state.dailyUsages.length,
+                };
             }),
         },
     };
@@ -164,6 +191,33 @@ function getTodayString() {
 
 function getFirstDayOfMonthString() {
     return `${new Date().toISOString().slice(0, 7)}-01`;
+}
+
+function getPreviousMonthDayString(day = "15") {
+    const date = new Date();
+    date.setUTCDate(15);
+    date.setUTCMonth(date.getUTCMonth() - 1);
+    return `${date.toISOString().slice(0, 7)}-${day}`;
+}
+
+function matchesDateFilter(value: string, filter: any) {
+    if (!filter) {
+        return true;
+    }
+
+    if (typeof filter === "string") {
+        return value === filter;
+    }
+
+    if (filter.gte && value < filter.gte) {
+        return false;
+    }
+
+    if (filter.lte && value > filter.lte) {
+        return false;
+    }
+
+    return true;
 }
 
 describe("quotaRoutes /admin/upgrade", () => {
@@ -612,6 +666,257 @@ describe("quotaRoutes /admin/account-quota", () => {
             url: "/admin/account-quota?username=missing-user",
             headers: {
                 "x-admin-token": "admin-secret",
+            },
+        });
+
+        expect(response.statusCode).toBe(404);
+        expect(response.json()).toMatchObject({
+            success: false,
+            error: "account_not_found",
+            message: "Target account was not found",
+        });
+    });
+});
+
+describe("quotaRoutes /admin/quota/reset-usage", () => {
+    let app: Fastify;
+
+    beforeEach(async () => {
+        resetState();
+        process.env.ADMIN_TOKEN = "admin-secret";
+
+        const server = fastify();
+        server.setValidatorCompiler(validatorCompiler);
+        server.setSerializerCompiler(serializerCompiler);
+        server.decorate("authenticate", async () => {});
+
+        app = server.withTypeProvider<ZodTypeProvider>() as unknown as Fastify;
+
+        const { quotaRoutes } = await import("./quotaRoutes");
+        quotaRoutes(app);
+        await app.ready();
+    });
+
+    afterEach(async () => {
+        delete process.env.ADMIN_TOKEN;
+        await app.close();
+        vi.clearAllMocks();
+    });
+
+    it("returns 503 when ADMIN_TOKEN is not configured", async () => {
+        state.accounts.push({ id: "user-1", username: "alice" });
+        delete process.env.ADMIN_TOKEN;
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/quota/reset-usage",
+            headers: {
+                "x-admin-token": "admin-secret",
+            },
+            payload: {
+                accountId: "user-1",
+                scope: "daily",
+            },
+        });
+
+        expect(response.statusCode).toBe(503);
+        expect(response.json()).toMatchObject({
+            success: false,
+            error: "admin_token_not_configured",
+            message: "ADMIN_TOKEN is not configured",
+        });
+    });
+
+    it("rejects requests when the admin token is missing or invalid", async () => {
+        state.accounts.push({ id: "user-1", username: "alice" });
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/quota/reset-usage",
+            payload: {
+                accountId: "user-1",
+                scope: "daily",
+            },
+        });
+
+        expect(response.statusCode).toBe(401);
+        expect(response.json()).toMatchObject({
+            success: false,
+            error: "invalid_admin_token",
+        });
+    });
+
+    it("resets only today's usage when scope is daily", async () => {
+        state.accounts.push({ id: "user-1", username: "alice" });
+        state.dailyUsages.push(
+            {
+                accountId: "user-1",
+                date: getFirstDayOfMonthString(),
+                tokensUsed: 1200,
+                requests: 2,
+            },
+            {
+                accountId: "user-1",
+                date: getTodayString(),
+                tokensUsed: 3200,
+                requests: 5,
+            },
+        );
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/quota/reset-usage",
+            headers: {
+                "x-admin-token": "admin-secret",
+            },
+            payload: {
+                username: "alice",
+                scope: "daily",
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({
+            success: true,
+            account: {
+                id: "user-1",
+                username: "alice",
+            },
+            reset: {
+                scope: "daily",
+                clearedUsageRows: 1,
+                clearedDates: [getTodayString()],
+                clearedTokens: 3200,
+                clearedRequests: 5,
+            },
+        });
+        expect(state.dailyUsages).toEqual([
+            {
+                accountId: "user-1",
+                date: getFirstDayOfMonthString(),
+                tokensUsed: 1200,
+                requests: 2,
+            },
+        ]);
+    });
+
+    it("resets only current-month usage when scope is monthly", async () => {
+        state.accounts.push({ id: "user-2", username: "bob" });
+        state.dailyUsages.push(
+            {
+                accountId: "user-2",
+                date: getPreviousMonthDayString("28"),
+                tokensUsed: 900,
+                requests: 1,
+            },
+            {
+                accountId: "user-2",
+                date: getFirstDayOfMonthString(),
+                tokensUsed: 1200,
+                requests: 2,
+            },
+            {
+                accountId: "user-2",
+                date: getTodayString(),
+                tokensUsed: 3200,
+                requests: 5,
+            },
+        );
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/quota/reset-usage",
+            headers: {
+                authorization: "Bearer admin-secret",
+            },
+            payload: {
+                accountId: "user-2",
+                scope: "monthly",
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({
+            success: true,
+            account: {
+                id: "user-2",
+                username: "bob",
+            },
+            reset: {
+                scope: "monthly",
+                clearedUsageRows: 2,
+                clearedDates: [getFirstDayOfMonthString(), getTodayString()],
+                clearedTokens: 4400,
+                clearedRequests: 7,
+            },
+        });
+        expect(state.dailyUsages).toEqual([
+            {
+                accountId: "user-2",
+                date: getPreviousMonthDayString("28"),
+                tokensUsed: 900,
+                requests: 1,
+            },
+        ]);
+    });
+
+    it("resets every usage row when scope is all", async () => {
+        state.accounts.push({ id: "user-3", username: "carol" });
+        state.dailyUsages.push(
+            {
+                accountId: "user-3",
+                date: getPreviousMonthDayString("03"),
+                tokensUsed: 800,
+                requests: 1,
+            },
+            {
+                accountId: "user-3",
+                date: getTodayString(),
+                tokensUsed: 500,
+                requests: 2,
+            },
+        );
+
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/quota/reset-usage",
+            headers: {
+                "x-admin-token": "admin-secret",
+            },
+            payload: {
+                accountId: "user-3",
+                scope: "all",
+            },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({
+            success: true,
+            account: {
+                id: "user-3",
+                username: "carol",
+            },
+            reset: {
+                scope: "all",
+                clearedUsageRows: 2,
+                clearedDates: [getPreviousMonthDayString("03"), getTodayString()],
+                clearedTokens: 1300,
+                clearedRequests: 3,
+            },
+        });
+        expect(state.dailyUsages).toEqual([]);
+    });
+
+    it("returns 404 when the target account does not exist", async () => {
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/quota/reset-usage",
+            headers: {
+                "x-admin-token": "admin-secret",
+            },
+            payload: {
+                username: "missing-user",
+                scope: "all",
             },
         });
 

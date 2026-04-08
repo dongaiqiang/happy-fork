@@ -1,0 +1,26 @@
+- 回复 Agent：Trae-主线执行位
+- 回复任务：2026-04-08-Trae-Main-HV-006-usage重置
+- 工单号：`HV-006` / `HV-006-TRAE-MAIN-03`
+- 详情如下：
+- 任务名称：2026-04-08-Trae-Main-HV-006-usage重置
+- 工作目录：`/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main`
+- 结果概述：已将 usage reset 收口为“标准 `/admin/quota/reset-usage` 网络入口 + 最小内部脚本入口”，并完成 reset 前后查询与数据库对照验证。
+- 修改文件：
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/quota/adminResetUsage.ts`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/quotaRoutes.ts`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/adminResetUsage.ts`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/package.json`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/quotaRoutes.test.ts`
+- 交付文件：
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/执行记录/HV-006-2026-04-08-Trae-Main-usage重置工作日志.md`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/测试结果/HV-006-2026-04-08-Trae-Main-usage重置验证结果.md`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/评审/HV-006-2026-04-08-Trae-Main-usage重置结论.md`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/执行记录/HV-006-2026-04-08-Trae-Main-usage重置派单回报.md`
+- reset 承接方式：脚本 + 接口
+- reset 粒度：`daily / monthly / all`
+- 实施结果：新增共享 reset 逻辑，补出 `POST /admin/quota/reset-usage` admin-only reset 接口，并补出 `yarn workspace happy-server admin:reset-usage` 最小内部脚本入口；当前支持按 `accountId` 或 `username` 定位指定账号，并返回本次 reset 清理掉的 usage 行数、日期、tokens 与 requests。
+- 验证结果：`yarn workspace happy-server test sources/app/api/routes/quotaRoutes.test.ts` 通过；`yarn build` 通过；已用临时账号 `hv006-trae-main-03-account` 真实完成 `daily -> monthly -> all` 三步 reset 链路，reset 前查询结果为 `dailyUsed=3200`、`monthlyUsed=4400`，`daily` 后查询结果为 `dailyUsed=0`、`monthlyUsed=1200`，`monthly` 后查询结果为 `monthlyUsed=0`，`all` 后数据库 `DailyUsage` 记录为 `0` 行，查询结果与数据库对照一致，随后已清理临时数据。
+- 已提交版本：以当前 HEAD 为准
+- 待同步事项：如总管采纳本轮结果，建议将“`/admin/quota/reset-usage` + `admin:reset-usage`”作为 `HV-006` 第四张单的 reset 事实基线继续沿用。
+- 风险与阻塞：网络 reset 入口仍依赖 `ADMIN_TOKEN`；本轮只清理 `DailyUsage`，未同步处理 `UsageReport`；当前这不是 quota 门禁与查询口径的代码阻塞，但后续若新增更完整报表页，需要单独决定是否补齐。
+- 是否需要其他目录同步：需要，原因是本轮已形成后续内部管理页可直接复用的 reset 基线与管理员使用口径。

@@ -14,6 +14,7 @@
     "dev": "lsof -ti tcp:3005 | xargs kill -9 && tsx --env-file=.env --env-file=.env.dev ./sources/main.ts",
     "admin:upgrade": "dotenv -e .env -e .env.dev -- tsx ./sources/adminUpgrade.ts",
     "admin:account-quota": "dotenv -e .env -e .env.dev -- tsx ./sources/adminAccountQuota.ts",
+    "admin:reset-usage": "dotenv -e .env -e .env.dev -- tsx ./sources/adminResetUsage.ts",
     "test": "vitest run",
     "migrate": "dotenv -e .env.dev -- prisma migrate dev",
     "migrate:reset": "dotenv -e .env.dev -- prisma migrate reset",
