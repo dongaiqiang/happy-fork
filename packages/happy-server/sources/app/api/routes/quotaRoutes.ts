@@ -1,6 +1,15 @@
 import { Fastify } from "../types";
+import { FastifyRequest } from "fastify";
+import { z } from "zod";
 import { db } from "@/storage/db";
 import { QUOTA_TIERS, QuotaTier } from "@/app/api/middleware/tokenQuota";
+import { AdminUpgradeInput, AdminUpgradeInputSchema, executeAdminUpgrade } from "@/app/quota/adminUpgrade";
+
+const SubscriptionUpgradeBodySchema = z.object({
+    tier: z.enum(['student', 'pro', 'team', 'enterprise']),
+    billingPeriod: z.enum(['monthly', 'annual']),
+    paymentMethod: z.enum(['wechat', 'alipay', 'stripe', 'paypal']),
+});
 
 /**
  * 配额管理路由
@@ -8,6 +17,45 @@ import { QUOTA_TIERS, QuotaTier } from "@/app/api/middleware/tokenQuota";
  * 提供用户配额查询和订阅计划列表接口
  */
 export function quotaRoutes(app: Fastify) {
+    app.post('/admin/upgrade', {
+        schema: {
+            body: AdminUpgradeInputSchema,
+        },
+    }, async (request, reply) => {
+        const adminToken = process.env.ADMIN_TOKEN;
+
+        if (!adminToken) {
+            return reply.code(503).send({
+                success: false,
+                error: 'admin_token_not_configured',
+                message: 'ADMIN_TOKEN is not configured',
+            });
+        }
+
+        const requestToken = getAdminTokenFromRequest(request);
+        if (requestToken !== adminToken) {
+            return reply.code(401).send({
+                success: false,
+                error: 'invalid_admin_token',
+                message: 'Invalid admin token',
+            });
+        }
+
+        const upgraded = await executeAdminUpgrade(request.body as AdminUpgradeInput);
+        if (!upgraded) {
+            return reply.code(404).send({
+                success: false,
+                error: 'account_not_found',
+                message: 'Target account was not found',
+            });
+        }
+
+        return reply.send({
+            success: true,
+            ...upgraded,
+        });
+    });
+
     /**
      * GET /quota
      * 获取当前用户的用量和配额信息
@@ -278,15 +326,7 @@ export function quotaRoutes(app: Fastify) {
     app.post('/subscription/upgrade', {
         preHandler: app.authenticate,
         schema: {
-            body: {
-                type: 'object',
-                properties: {
-                    tier: { type: 'string', enum: ['student', 'pro', 'team', 'enterprise'] },
-                    billingPeriod: { type: 'string', enum: ['monthly', 'annual'] },
-                    paymentMethod: { type: 'string', enum: ['wechat', 'alipay', 'stripe', 'paypal'] },
-                },
-                required: ['tier', 'billingPeriod', 'paymentMethod'],
-            },
+            body: SubscriptionUpgradeBodySchema,
         },
     }, async (request, reply) => {
         const userId = request.userId;
@@ -388,4 +428,21 @@ async function createSubscriptionOrder(
         paymentUrl: `https://payment.example.com/pay?order=${orderId}`,
         expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 分钟有效
     };
+}
+
+function getAdminTokenFromRequest(request: FastifyRequest): string | null {
+    const adminTokenHeader = request.headers['x-admin-token'];
+    if (typeof adminTokenHeader === 'string' && adminTokenHeader.length > 0) {
+        return adminTokenHeader;
+    }
+
+    const authorizationHeader = request.headers.authorization;
+    if (typeof authorizationHeader === 'string') {
+        const [scheme, token] = authorizationHeader.split(' ');
+        if (scheme?.toLowerCase() === 'bearer' && token) {
+            return token;
+        }
+    }
+
+    return null;
 }
