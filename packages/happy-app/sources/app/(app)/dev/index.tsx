@@ -316,6 +316,12 @@ export default function DevScreen() {
             {/* System */}
             <ItemGroup title="System">
                 <Item
+                    title="Quota Ops"
+                    subtitle="Internal page for admin quota query, upgrade, and reset"
+                    icon={<Ionicons name="shield-checkmark-outline" size={28} color="#34C759" />}
+                    onPress={() => router.push('/dev/quota-ops')}
+                />
+                <Item
                     title="Purchases"
                     subtitle="View subscriptions and entitlements"
                     icon={<Ionicons name="card-outline" size={28} color="#007AFF" />}
