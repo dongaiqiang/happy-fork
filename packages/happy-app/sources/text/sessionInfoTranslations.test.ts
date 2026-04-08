@@ -471,7 +471,7 @@ const requiredInfoTsxUsages = [
 
 const forbiddenStringLiterals = [
     'Resume Session',
-    'Open on Mac',
+    'Continue on Mac',
     'Switch Control to Mac',
     'Switch Control to Mobile',
     'Dangerously Skip Permissions',
@@ -490,7 +490,7 @@ const requiredEmptySessionsTabletUsages = [
 
 const forbiddenEmptySessionsTabletLiterals = [
     'No active sessions',
-    'Start a new session on any of your connected machines.',
+    'Start a new session on any of your connected computers.',
     'Open a new terminal on your computer to start a session.',
     'Start New Session',
 ] as const;
@@ -583,10 +583,10 @@ const requiredMachineUsages = [
 ] as const;
 
 const forbiddenMachineLiterals = [
-    'Stop Daemon?',
-    'Rename Machine',
+    'Stop Background Service?',
+    'Rename Computer',
     'Create Directory?',
-    'Machine not found',
+    'Computer not found',
     'Previous Sessions (up to 5 most recent)',
     'Enter custom path',
 ] as const;
@@ -600,7 +600,7 @@ const forbiddenRestoreIndexLiterals = [
     'Open HelloVibe on your mobile device',
     'Go to Settings → Account',
     'Link New Device',
-    'Restore with Secret Key Instead',
+    'Use Backup Key Instead',
 ] as const;
 
 const requiredRestoreManualUsages = [
@@ -609,7 +609,7 @@ const requiredRestoreManualUsages = [
 ] as const;
 
 const forbiddenRestoreManualLiterals = [
-    'Enter your secret key to restore access to your account.',
+    'Enter your backup key to sign in to your existing account.',
     'XXXXX-XXXXX-XXXXX...',
 ] as const;
 
@@ -619,8 +619,8 @@ const requiredWelcomeUsages = [
 ] as const;
 
 const forbiddenWelcomeLiterals = [
-    '创建账户失败：服务器没有返回有效登录信息。请先确认右上角服务器地址已改成 https://api.hellovibe.com，然后再重试。',
-    '创建账户失败：${message || \'未知错误\'}。请先确认右上角服务器地址已改成 https://api.hellovibe.com，然后再重试。',
+    '创建账户失败：服务器没有返回有效登录信息。请先确认右上角服务器地址已改成 https://api.easycode-ai.xyz，然后再重试。',
+    '创建账户失败：${message || \'未知错误\'}。请先确认右上角服务器地址已改成 https://api.easycode-ai.xyz，然后再重试。',
 ] as const;
 
 const requiredSettingsUsages = [
@@ -787,12 +787,12 @@ const requiredNewSessionIndexUsages = [
 
 const forbiddenNewSessionIndexLiterals = [
     'What would you like to work on?',
-    'Select Machine',
+    'Select Computer',
     'Select Working Directory',
-    'Type to filter machines...',
-    'Recent Machines',
-    'Favorite Machines',
-    'No machines available',
+    'Type to filter computers...',
+    'Recent Computers',
+    'Favorite Computers',
+    'No computers available',
     'Type to filter or enter custom directory...',
     'Recent Directories',
     'Favorite Directories',
@@ -803,8 +803,8 @@ const forbiddenNewSessionIndexLiterals = [
     'Codex CLI Not Detected',
     'Gemini CLI Not Detected',
     "Don't show this popup for",
-    'this machine',
-    'any machine',
+    'this computer',
+    'any computer',
     'Install: npm install -g @anthropic-ai/claude-code',
     'Install: npm install -g codex-cli',
     'Install Gemini CLI if available',
@@ -829,11 +829,11 @@ const requiredNewSessionMachinePickerUsages = [
 ] as const;
 
 const forbiddenNewSessionMachinePickerLiterals = [
-    'Select Machine',
-    'Type to filter machines...',
-    'Recent Machines',
-    'Favorite Machines',
-    'No machines available',
+    'Select Computer',
+    'Type to filter computers...',
+    'Recent Computers',
+    'Favorite Computers',
+    'No computers available',
 ] as const;
 
 const requiredNewSessionPathPickerUsages = [
