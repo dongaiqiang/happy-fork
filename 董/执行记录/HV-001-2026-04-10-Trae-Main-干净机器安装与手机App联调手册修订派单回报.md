@@ -1,0 +1,40 @@
+- 回复 Agent：Trae-主线执行位
+- 回复任务：HV-001-TRAE-MAIN-04 干净机器安装与手机App联调手册修订
+- 工单号：`HV-001` / `HV-001-TRAE-MAIN-04`
+- 详情如下：
+- 任务名称：`HV-001-TRAE-MAIN-04 干净机器安装与手机App联调手册修订`
+- 工作目录：`/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main`
+- 结果概述：已完成 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/HelloVibe 干净机器安装与手机 App 联调手册.md` 的主线修订，手册最终主口径已统一为 `hellovibe` / `hellovibe` / `HELLOVIBE_`，并已按当前实现拆开完整新会话路径与机器详情页快捷启动路径。
+- 修改文件：
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/HelloVibe 干净机器安装与手机 App 联调手册.md`
+- 交付文件：
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/执行记录/HV-001-2026-04-10-Trae-Main-干净机器安装与手机App联调手册修订工作日志.md`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/执行记录/HV-001-2026-04-10-Trae-Main-干净机器安装与手机App联调手册修订说明.md`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/测试结果/HV-001-2026-04-10-Trae-Main-干净机器安装与手机App联调手册修订验证结果.md`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/执行记录/HV-001-2026-04-10-Trae-Main-干净机器安装与手机App联调手册修订派单回报.md`
+- 关键修订点：
+  - 安装口径：手册最终采用 `hellovibe` / `hellovibe` / `HELLOVIBE_` 主口径，`happy` 仅保留为兼容层说明。
+  - tgz 替代安装：明确在 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main` 目录执行 `yarn install`、`yarn workspace hellovibe build`，再进入 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-cli` 执行 `yarn build`、`npm pack`，产物为 `hellovibe-0.14.0-0.tgz`，安装后用 `hellovibe --help`、`hellovibe auth help`、`hellovibe daemon --help` 验证。
+  - auth：明确 `hellovibe auth login` 的移动端路径会显示二维码与 `hellovibe://terminal?...`，Web Authentication 可能打开浏览器，但不是手机扫码绑定电脑的同一路径。
+  - daemon：明确 `hellovibe daemon start` 必须在登录后执行，未登录时会提示先完成 `hellovibe auth login`。
+  - App 路径：明确未登录首页、恢复账号页、扫码绑定入口、服务地址入口、机器详情页各自职责。
+  - 新会话路径：明确完整新会话在 `/new` 页面完成；机器详情页只支持按目录快捷启动，不再把模型或权限模式选择写在机器详情页流程中。
+- 验证结果：
+  - 命令核对：
+    - `node /Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-cli/bin/happy.mjs auth --help | head -n 20`：输出头部为 `hellovibe auth - Sign in and device access`
+    - `node /Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-cli/bin/happy.mjs daemon --help | head -n 20`：输出头部为 `hellovibe daemon - Background service management`
+    - `cd /Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-cli && npm pack --dry-run | head -n 40`：确认产物名为 `hellovibe-0.14.0-0.tgz`
+  - 页面核对：
+    - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/app/(app)/index.tsx`
+    - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/app/(app)/restore/index.tsx`
+    - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/components/EmptyMainScreen.tsx`
+    - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/app/(app)/machine/[id].tsx`
+    - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/app/(app)/new/index.tsx`
+  - 文档自检：
+    - `GetDiagnostics` 对 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/HelloVibe 干净机器安装与手机 App 联调手册.md` 返回空数组
+- 已提交版本：`无`
+- 待同步事项：建议总管位、测试位与联调位后续统一以 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/HelloVibe 干净机器安装与手机 App 联调手册.md` 作为执行入口，并同步接受正式环境与局域网联调两套地址口径。
+- 风险与阻塞：
+  - 当前 npm registry 上 `hellovibe` 是否已正式发布，仍需以实际 registry 状态为准；手册已提供 tgz 替代方案。
+  - 当前默认 home 目录仍为 `~/.happy`，不是 `~/.hellovibe`；手册已补充说明，避免测试位误判。
+- 是否需要其他目录同步：需要，原因是这份手册已经成为测试位、联调位和总管位继续工作的共享输入，后续如有外发或引用，应统一引用本次修订后的手册路径。
