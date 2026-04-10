@@ -6,7 +6,7 @@
  */
 
 import chalk from 'chalk'
-import { configuration } from '@/configuration'
+import { configuration, readBrandEnv } from '@/configuration'
 import { readSettings, readCredentials } from '@/persistence'
 import { checkIfDaemonRunningAndCleanupStaleState } from '@/daemon/controlClient'
 import { findRunawayHappyProcesses, findAllHappyProcesses } from '@/daemon/doctor'
@@ -23,9 +23,9 @@ import packageJson from '../../package.json'
 export function getEnvironmentInfo(): Record<string, any> {
     return {
         PWD: process.env.PWD,
-        HAPPY_HOME_DIR: process.env.HAPPY_HOME_DIR,
-        HAPPY_SERVER_URL: process.env.HAPPY_SERVER_URL,
-        HAPPY_PROJECT_ROOT: process.env.HAPPY_PROJECT_ROOT,
+        HELLOVIBE_HOME_DIR: readBrandEnv('HELLOVIBE_HOME_DIR', 'HAPPY_HOME_DIR'),
+        HELLOVIBE_SERVER_URL: readBrandEnv('HELLOVIBE_SERVER_URL', 'HAPPY_SERVER_URL'),
+        HELLOVIBE_PROJECT_ROOT: readBrandEnv('HELLOVIBE_PROJECT_ROOT', 'HAPPY_PROJECT_ROOT'),
         DANGEROUSLY_LOG_TO_SERVER_FOR_AI_AUTO_DEBUGGING: process.env.DANGEROUSLY_LOG_TO_SERVER_FOR_AI_AUTO_DEBUGGING,
         NODE_ENV: process.env.NODE_ENV,
         DEBUG: process.env.DEBUG,
@@ -110,8 +110,8 @@ export async function runDoctorCommand(filter?: 'all' | 'daemon'): Promise<void>
         // Environment
         console.log(chalk.bold('\n🌍 Environment Variables'));
         const env = getEnvironmentInfo();
-        console.log(`HAPPY_HOME_DIR: ${env.HAPPY_HOME_DIR ? chalk.green(env.HAPPY_HOME_DIR) : chalk.gray('not set')}`);
-        console.log(`HAPPY_SERVER_URL: ${env.HAPPY_SERVER_URL ? chalk.green(env.HAPPY_SERVER_URL) : chalk.gray('not set')}`);
+        console.log(`HELLOVIBE_HOME_DIR: ${env.HELLOVIBE_HOME_DIR ? chalk.green(env.HELLOVIBE_HOME_DIR) : chalk.gray('not set')}`);
+        console.log(`HELLOVIBE_SERVER_URL: ${env.HELLOVIBE_SERVER_URL ? chalk.green(env.HELLOVIBE_SERVER_URL) : chalk.gray('not set')}`);
         console.log(`DANGEROUSLY_LOG_TO_SERVER: ${env.DANGEROUSLY_LOG_TO_SERVER_FOR_AI_AUTO_DEBUGGING ? chalk.yellow('ENABLED') : chalk.gray('not set')}`);
         console.log(`DEBUG: ${env.DEBUG ? chalk.green(env.DEBUG) : chalk.gray('not set')}`);
         console.log(`NODE_ENV: ${env.NODE_ENV ? chalk.green(env.NODE_ENV) : chalk.gray('not set')}`);
@@ -210,7 +210,7 @@ export async function runDoctorCommand(filter?: 'all' | 'daemon'): Promise<void>
 
         if (filter === 'all' && allProcesses.length > 1) { // More than just current process
             console.log(chalk.bold('\n💡 Process Management'));
-            console.log(chalk.gray('To clean up runaway processes: happy doctor clean'));
+            console.log(chalk.gray('To clean up runaway processes: hellovibe doctor clean'));
         }
     } catch (error) {
         console.log(chalk.red('❌ Error checking daemon status'));

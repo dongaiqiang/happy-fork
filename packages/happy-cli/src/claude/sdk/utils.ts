@@ -10,6 +10,7 @@ import { execSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import { logger } from '@/ui/logger'
 import { isBun } from '@/utils/runtime'
+import { readBrandEnv } from '@/configuration'
 
 /**
  * Get the directory path of the current module
@@ -130,21 +131,22 @@ function findGlobalClaudePath(): string | null {
  * Compares global and bundled versions, uses the newer one
  * 
  * Environment variables:
- * - HAPPY_CLAUDE_PATH: Force a specific path to claude executable
- * - HAPPY_USE_BUNDLED_CLAUDE=1: Force use of node_modules version (skip global search)
- * - HAPPY_USE_GLOBAL_CLAUDE=1: Force use of global version (if available)
+ * - HELLOVIBE_CLAUDE_PATH: Force a specific path to claude executable
+ * - HELLOVIBE_USE_BUNDLED_CLAUDE=1: Force use of node_modules version (skip global search)
+ * - HELLOVIBE_USE_GLOBAL_CLAUDE=1: Force use of global version (if available)
  */
 export function getDefaultClaudeCodePath(): string {
     const nodeModulesPath = join(__dirname, '..', '..', '..', 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js')
     
     // Allow explicit override via env var
-    if (process.env.HAPPY_CLAUDE_PATH) {
-        logger.debug(`[Claude SDK] Using HAPPY_CLAUDE_PATH: ${process.env.HAPPY_CLAUDE_PATH}`)
-        return process.env.HAPPY_CLAUDE_PATH
+    const claudePathOverride = readBrandEnv('HELLOVIBE_CLAUDE_PATH', 'HAPPY_CLAUDE_PATH')
+    if (claudePathOverride) {
+        logger.debug(`[Claude SDK] Using HELLOVIBE_CLAUDE_PATH: ${claudePathOverride}`)
+        return claudePathOverride
     }
 
     // Force bundled version if requested
-    if (process.env.HAPPY_USE_BUNDLED_CLAUDE === '1') {
+    if (readBrandEnv('HELLOVIBE_USE_BUNDLED_CLAUDE', 'HAPPY_USE_BUNDLED_CLAUDE') === '1') {
         logger.debug(`[Claude SDK] Forced bundled version: ${nodeModulesPath}`)
         return nodeModulesPath
     }

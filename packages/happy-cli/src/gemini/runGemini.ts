@@ -81,7 +81,7 @@ export async function runGemini(opts: {
   const machineId = settings?.machineId;
   const sandboxConfig = settings?.sandboxConfig;
   if (!machineId) {
-    console.error('HelloVibe could not find this computer\'s local setup. Run "happy auth login --force" and try again. If it still fails, report it at https://github.com/dongaiqiang/hellovibe/issues');
+    console.error('HelloVibe could not find this computer\'s local setup. Run "hellovibe auth login --force" and try again. If it still fails, report it at https://github.com/dongaiqiang/hellovibe/issues');
     process.exit(1);
   }
   logger.debug(`Using machineId: ${machineId}`);

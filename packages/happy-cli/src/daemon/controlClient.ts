@@ -9,7 +9,7 @@ import { Metadata } from '@/api/types';
 import { projectPath } from '@/projectPath';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { configuration } from '@/configuration';
+import { configuration, readBrandEnv } from '@/configuration';
 
 async function daemonPost(path: string, body?: any): Promise<{ error?: string } | any> {
   const state = await readDaemonState();
@@ -32,7 +32,8 @@ async function daemonPost(path: string, body?: any): Promise<{ error?: string } 
   }
 
   try {
-    const timeout = process.env.HAPPY_DAEMON_HTTP_TIMEOUT ? parseInt(process.env.HAPPY_DAEMON_HTTP_TIMEOUT) : 10_000;
+    const timeoutValue = readBrandEnv('HELLOVIBE_DAEMON_HTTP_TIMEOUT', 'HAPPY_DAEMON_HTTP_TIMEOUT');
+    const timeout = timeoutValue ? parseInt(timeoutValue) : 10_000;
     const response = await fetch(`http://127.0.0.1:${state.httpPort}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

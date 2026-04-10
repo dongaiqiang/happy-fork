@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 import type { AgentState, Metadata } from '@/api/types';
-import { configuration } from '@/configuration';
+import { configuration, readBrandEnv } from '@/configuration';
 import { projectPath } from '@/projectPath';
 import type { SandboxConfig } from '@/persistence';
 import packageJson from '../../package.json';
@@ -49,7 +49,7 @@ export interface SessionMetadataResult {
 }
 
 export function resolveTerminalCarrierMetadata(): Pick<Metadata, 'terminalCarrier' | 'tmuxSessionId'> {
-    let tmuxSessionId = process.env.HAPPY_TMUX_SESSION_ID?.trim();
+    let tmuxSessionId = readBrandEnv('HELLOVIBE_TMUX_SESSION_ID', 'HAPPY_TMUX_SESSION_ID')?.trim();
     if (!tmuxSessionId && process.env.TMUX) {
         try {
             tmuxSessionId = execFileSync('tmux', ['display-message', '-p', '#S:#W'], {
@@ -66,7 +66,7 @@ export function resolveTerminalCarrierMetadata(): Pick<Metadata, 'terminalCarrie
         };
     }
 
-    const terminalCarrier = process.env.HAPPY_TERMINAL_CARRIER?.trim();
+    const terminalCarrier = readBrandEnv('HELLOVIBE_TERMINAL_CARRIER', 'HAPPY_TERMINAL_CARRIER')?.trim();
     if (terminalCarrier === 'tmux' || terminalCarrier === 'fallback' || terminalCarrier === 'unknown') {
         return {
             terminalCarrier,

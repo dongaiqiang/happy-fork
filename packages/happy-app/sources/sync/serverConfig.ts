@@ -4,12 +4,92 @@ import { MMKV } from 'react-native-mmkv';
 const serverConfigStorage = new MMKV({ id: 'server-config' });
 
 const SERVER_KEY = 'custom-server-url';
-const DEFAULT_SERVER_URL = 'https://api.cluster-fluster.com';
+const DEFAULT_SERVER_URL = 'https://api.easycode-ai.xyz';
+
+export type ServerUrlSource =
+    | 'stored-custom-server-url'
+    | 'env-expo-public-hellovibe-server-url'
+    | 'env-expo-public-happy-server-url'
+    | 'env-expo-public-server-url'
+    | 'default-server-url';
+
+export interface ResolvedServerUrlInfo {
+    url: string;
+    source: ServerUrlSource;
+    storedCustomServerUrl: string | null;
+    envHelloVibeServerUrl: string | null;
+    envHappyServerUrl: string | null;
+    envServerUrl: string | null;
+    defaultServerUrl: string;
+}
+
+export function getResolvedServerUrlInfo(): ResolvedServerUrlInfo {
+    const storedCustomServerUrl = serverConfigStorage.getString(SERVER_KEY)?.trim() || null;
+    const envHelloVibeServerUrl = process.env.EXPO_PUBLIC_HELLOVIBE_SERVER_URL?.trim() || null;
+    const envHappyServerUrl = process.env.EXPO_PUBLIC_HAPPY_SERVER_URL?.trim() || null;
+    const envServerUrl = process.env.EXPO_PUBLIC_SERVER_URL?.trim() || null;
+
+    if (storedCustomServerUrl) {
+        return {
+            url: storedCustomServerUrl,
+            source: 'stored-custom-server-url',
+            storedCustomServerUrl,
+            envHelloVibeServerUrl,
+            envHappyServerUrl,
+            envServerUrl,
+            defaultServerUrl: DEFAULT_SERVER_URL
+        };
+    }
+
+    if (envHelloVibeServerUrl) {
+        return {
+            url: envHelloVibeServerUrl,
+            source: 'env-expo-public-hellovibe-server-url',
+            storedCustomServerUrl: null,
+            envHelloVibeServerUrl,
+            envHappyServerUrl,
+            envServerUrl,
+            defaultServerUrl: DEFAULT_SERVER_URL
+        };
+    }
+
+    if (envHappyServerUrl) {
+        return {
+            url: envHappyServerUrl,
+            source: 'env-expo-public-happy-server-url',
+            storedCustomServerUrl: null,
+            envHelloVibeServerUrl,
+            envHappyServerUrl,
+            envServerUrl,
+            defaultServerUrl: DEFAULT_SERVER_URL
+        };
+    }
+
+    if (envServerUrl) {
+        return {
+            url: envServerUrl,
+            source: 'env-expo-public-server-url',
+            storedCustomServerUrl: null,
+            envHelloVibeServerUrl,
+            envHappyServerUrl,
+            envServerUrl,
+            defaultServerUrl: DEFAULT_SERVER_URL
+        };
+    }
+
+    return {
+        url: DEFAULT_SERVER_URL,
+        source: 'default-server-url',
+        storedCustomServerUrl: null,
+        envHelloVibeServerUrl,
+        envHappyServerUrl,
+        envServerUrl,
+        defaultServerUrl: DEFAULT_SERVER_URL
+    };
+}
 
 export function getServerUrl(): string {
-    return serverConfigStorage.getString(SERVER_KEY) || 
-           process.env.EXPO_PUBLIC_HAPPY_SERVER_URL || 
-           DEFAULT_SERVER_URL;
+    return getResolvedServerUrlInfo().url;
 }
 
 export function setServerUrl(url: string | null): void {

@@ -1,4 +1,4 @@
-<div align="center"><img src="/.github/logotype-dark.png" width="400" title="Happy Coder" alt="Happy Coder"/></div>
+<div align="center"><img src="/.github/logotype-dark.png" width="400" title="HelloVibe" alt="HelloVibe"/></div>
 
 <h1 align="center">
   Mobile and Web Client for Claude Code & Codex
@@ -10,7 +10,7 @@ Use Claude Code or Codex from anywhere with end-to-end encryption.
 
 <div align="center">
   
-[📱 **iOS App**](https://apps.apple.com/us/app/happy-claude-code-client/id6748571505) • [🤖 **Android App**](https://play.google.com/store/apps/details?id=com.ex3ndr.happy) • [🌐 **Web App**](https://app.happy.engineering) • [🎥 **See a Demo**](https://youtu.be/GCS0OG9QMSE) • [📚 **Documentation**](https://happy.engineering/docs/) • [💬 **Discord**](https://discord.gg/fX9WBAhyfD)
+[📱 **iOS App**](https://apps.apple.com/app/id6761639738) • [🤖 **Android App**](https://play.google.com/store/apps/details?id=com.hellovibe.app) • [🌐 **Web App**](https://app.hellovibe.com) • [🎥 **See a Demo**](https://youtu.be/GCS0OG9QMSE) • [📚 **Documentation**](https://github.com/slopus/hellovibe/tree/main/docs) • [💬 **Discord**](https://discord.gg/fX9WBAhyfD)
 
 </div>
 
@@ -22,7 +22,7 @@ Step 1: Download App
 </h3>
 
 <div align="center">
-<a href="https://apps.apple.com/us/app/happy-claude-code-client/id6748571505"><img width="135" height="39" alt="appstore" src="https://github.com/user-attachments/assets/45e31a11-cf6b-40a2-a083-6dc8d1f01291" /></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://play.google.com/store/apps/details?id=com.ex3ndr.happy"><img width="135" height="39" alt="googleplay" src="https://github.com/user-attachments/assets/acbba639-858f-4c74-85c7-92a4096efbf5" /></a>
+<a href="https://apps.apple.com/app/id6761639738"><img width="135" height="39" alt="appstore" src="https://github.com/user-attachments/assets/45e31a11-cf6b-40a2-a083-6dc8d1f01291" /></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://play.google.com/store/apps/details?id=com.hellovibe.app"><img width="135" height="39" alt="googleplay" src="https://github.com/user-attachments/assets/acbba639-858f-4c74-85c7-92a4096efbf5" /></a>
 </div>
 
 <h3 align="center">
@@ -30,8 +30,12 @@ Step 2: Install CLI on your computer
 </h3>
 
 ```bash
-npm install -g happy-coder
+npm install -g hellovibe
 ```
+
+Primary package: `hellovibe`  
+Primary command: `hellovibe`  
+Compatibility command alias still accepted for now: `happy`
 
 <h3 align="center">
 Run From Source (Repo Checkout)
@@ -53,30 +57,30 @@ yarn release
 ```
 
 <h3 align="center">
-Step 3: Start using `happy` instead of `claude` or `codex`
+Step 3: Start using the HelloVibe CLI entry point
 </h3>
 
 ```bash
 
 # Instead of: claude
-# Use: happy
+# Use: hellovibe
 
-happy
+hellovibe
 
 # Instead of: codex
-# Use: happy codex
+# Use: hellovibe codex
 
-happy codex
+hellovibe codex
 
 ```
 
-<div align="center"><img src="/.github/mascot.png" width="200" title="Happy Coder" alt="Happy Coder"/></div>
+<div align="center"><img src="/.github/mascot.png" width="200" title="HelloVibe" alt="HelloVibe"/></div>
 
 ## How does it work?
 
-On your computer, run `happy` instead of `claude` or `happy codex` instead of `codex` to start your AI through our wrapper. When you want to control your coding agent from your phone, it restarts the session in remote mode. To switch back to your computer, just press any key on your keyboard.
+On your computer, run `hellovibe` instead of `claude` or `hellovibe codex` instead of `codex` to start your AI through the current HelloVibe CLI wrapper. For upgrade compatibility, the old `happy` command still works. When you want to control your coding workflow from your phone, it restarts the session in remote mode. To switch back to your computer, just press any key on your keyboard.
 
-## 🔥 Why Happy Coder?
+## 🔥 Why HelloVibe?
 
 - 📱 **Mobile access to Claude Code and Codex** - Check what your AI is building while away from your desk
 - 🔔 **Push notifications** - Get alerted when Claude Code and Codex needs permission or encounters errors  
@@ -86,20 +90,20 @@ On your computer, run `happy` instead of `claude` or `happy codex` instead of `c
 
 ## 📦 Project Components
 
-- **[Happy App](https://github.com/slopus/happy/tree/main/packages/happy-app)** - Web UI + mobile client (Expo)
-- **[Happy CLI](https://github.com/slopus/happy/tree/main/packages/happy-cli)** - Command-line interface for Claude Code and Codex
-- **[Happy Agent](https://github.com/slopus/happy/tree/main/packages/happy-agent)** - Remote agent control CLI (create, send, monitor sessions)
-- **[Happy Server](https://github.com/slopus/happy/tree/main/packages/happy-server)** - Backend server for encrypted sync
+- **[HelloVibe App](https://github.com/slopus/hellovibe/tree/main/packages/happy-app)** - Web UI + mobile client (Expo)
+- **[HelloVibe CLI](https://github.com/slopus/hellovibe/tree/main/packages/happy-cli)** - Command-line interface for Claude Code and Codex
+- **[HelloVibe Agent](https://github.com/slopus/hellovibe/tree/main/packages/happy-agent)** - Remote agent control CLI (create, send, monitor sessions)
+- **[HelloVibe Server](https://github.com/slopus/hellovibe/tree/main/packages/happy-server)** - Backend server for encrypted sync
 
 ## 🏠 Who We Are
 
-We're engineers scattered across Bay Area coffee shops and hacker houses, constantly checking how our AI coding agents are progressing on our pet projects during lunch breaks. Happy Coder was born from the frustration of not being able to peek at our AI coding tools building our side hustles while we're away from our keyboards. We believe the best tools come from scratching your own itch and sharing with the community.
+We're engineers scattered across Bay Area coffee shops and hacker houses, constantly checking how our AI coding agents are progressing on our pet projects during lunch breaks. HelloVibe was born from the frustration of not being able to peek at our AI coding tools building our side hustles while we're away from our keyboards. We believe the best tools come from scratching your own itch and sharing with the community.
 
 ## 📚 Documentation & Contributing
 
-- **[Documentation Website](https://happy.engineering/docs/)** - Learn how to use Happy Coder effectively
+- **[Documentation](https://github.com/slopus/hellovibe/tree/main/docs)** - Learn how HelloVibe works and how to operate it
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - Development setup including iOS, Android, and macOS desktop variant builds
-- **[Edit docs at github.com/slopus/slopus.github.io](https://github.com/slopus/slopus.github.io)** - Help improve our documentation and guides
+- **[Repository](https://github.com/slopus/hellovibe)** - Browse code, open issues, and improve the docs and guides
 
 ## License
 

@@ -618,7 +618,7 @@ export const en: TranslationStructure = {
         cliVersionOutdated: 'HelloVibe CLI Update Required',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
             `Version ${currentVersion} installed. Update to ${requiredVersion} or later`,
-        updateCliInstructions: 'Update HelloVibe CLI with the current install command: npm install -g happy-coder@latest',
+        updateCliInstructions: 'Update HelloVibe CLI with the current install command: npm install -g hellovibe@latest',
         enabled: 'Enabled',
         disabled: 'Disabled',
         sandboxIsolation: ({ value }: { value: string }) => `isolation=${value}`,
@@ -640,7 +640,7 @@ export const en: TranslationStructure = {
             // Used by EmptyMainScreen component
             readyToCode: 'Ready to code?',
             installCli: 'Install HelloVibe CLI',
-            runIt: 'Run the `happy` command',
+            runIt: 'Run the `hellovibe` command',
             scanQrCode: 'Scan the HelloVibe QR code',
             openCamera: 'Open Camera',
         },
@@ -706,6 +706,13 @@ export const en: TranslationStructure = {
         },
         context: {
             remaining: ({ percent }: { percent: number }) => `${percent}% left`,
+        },
+        voiceInput: {
+            listeningNew: 'Realtime transcription is running. Tap stop when this draft is complete.',
+            listeningAppend: 'Continuing the current draft. New speech will be appended after the existing text.',
+            readyToContinue: 'This round ended automatically. Tap the mic to keep adding to the current draft.',
+            readyToSend: 'Draft is preserved. You can send it now or keep editing.',
+            sendDraft: 'Send',
         },
         suggestion: {
             fileLabel: 'FILE',
@@ -1002,7 +1009,7 @@ export const en: TranslationStructure = {
     machine: {
         launchNewSessionInDirectory: 'Launch New Session in Directory',
         offlineUnableToSpawn: 'Launcher disabled while machine is offline',
-        offlineHelp: '• Make sure your computer is online\n• Run the HelloVibe CLI status check command: `happy daemon status`\n• If needed, update the current HelloVibe CLI package: `npm install -g happy-coder@latest`',
+        offlineHelp: '• Make sure your computer is online\n• Run the HelloVibe CLI status check command: `hellovibe daemon status`\n• If needed, update the current HelloVibe CLI package: `npm install -g hellovibe@latest`',
         daemon: 'Background Service',
         status: 'Status',
         daemonLikelyAlive: 'likely alive',

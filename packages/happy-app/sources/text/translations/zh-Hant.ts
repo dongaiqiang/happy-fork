@@ -604,7 +604,7 @@ export const zhHant: TranslationStructure = {
         cliVersionOutdated: '需要更新 HelloVibe CLI',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
             `已安裝版本 ${currentVersion}。請更新到 ${requiredVersion} 或更高版本`,
-        updateCliInstructions: '使用目前的安裝命令更新 HelloVibe CLI：npm install -g happy-coder@latest',
+        updateCliInstructions: '使用目前的安裝命令更新 HelloVibe CLI：npm install -g hellovibe@latest',
         enabled: '已啟用',
         disabled: '已停用',
         sandboxIsolation: ({ value }: { value: string }) => `隔離=${value}`,
@@ -692,6 +692,13 @@ export const zhHant: TranslationStructure = {
         },
         context: {
             remaining: ({ percent }: { percent: number }) => `剩餘 ${percent}%`,
+        },
+        voiceInput: {
+            listeningNew: '正在即時轉寫，點停止後會保留目前草稿。',
+            listeningAppend: '正在繼續補充目前草稿，新語音會追加在現有文字後面。',
+            readyToContinue: '本輪聽寫已自動結束，點麥克風可繼續補充目前草稿。',
+            readyToSend: '目前草稿已保留，可直接送出或繼續編輯。',
+            sendDraft: '送出',
         },
         suggestion: {
             fileLabel: '檔案',
@@ -988,7 +995,7 @@ export const zhHant: TranslationStructure = {
     machine: {
         launchNewSessionInDirectory: '在目錄中啟動新工作階段',
         offlineUnableToSpawn: '裝置離線時無法啟動',
-        offlineHelp: '• 確保您的電腦在線上\n• 在電腦上執行 HelloVibe CLI 狀態檢查命令：`happy daemon status`\n• 如有需要，請使用目前的 HelloVibe CLI 安裝命令更新：`npm install -g happy-coder@latest`',
+        offlineHelp: '• 確保您的電腦在線上\n• 在電腦上執行 HelloVibe CLI 狀態檢查命令：`hellovibe daemon status`\n• 如有需要，請使用目前的 HelloVibe CLI 安裝命令更新：`npm install -g hellovibe@latest`',
         daemon: '背景服務',
         status: '狀態',
         daemonLikelyAlive: '可能在線',

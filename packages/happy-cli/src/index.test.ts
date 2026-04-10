@@ -22,6 +22,7 @@ function runCli(args: string[], happyHomeDir?: string): { stdout: string; stderr
       encoding: 'utf-8',
       env: {
         ...process.env,
+        HELLOVIBE_HOME_DIR: tempHomeDir,
         HAPPY_HOME_DIR: tempHomeDir
       },
       timeout: 4000
@@ -39,12 +40,12 @@ function runCli(args: string[], happyHomeDir?: string): { stdout: string; stderr
   }
 }
 
-describe('happy CLI entrypoint', () => {
+describe('hellovibe CLI entrypoint', () => {
   it('prints version without triggering authentication', () => {
     const result = runCli(['--version'])
 
     expect(result.exitCode).toBe(0)
-    expect(result.stdout).toContain(`happy version: ${packageJson.version}`)
+    expect(result.stdout).toContain(`hellovibe version: ${packageJson.version}`)
     expect(result.stdout).not.toContain('Authentication Status')
     expect(result.stdout).not.toContain('Mobile Authentication')
   })
@@ -54,7 +55,7 @@ describe('happy CLI entrypoint', () => {
 
     expect(result.exitCode).toBe(1)
     expect(result.stderr).toContain('HelloVibe is not signed in on this computer yet.')
-    expect(result.stderr).toContain('Run "happy auth login" first, then run "happy daemon start" again.')
+    expect(result.stderr).toContain('Run "hellovibe auth login" first, then run "hellovibe daemon start" again.')
     expect(result.stdout).not.toContain('Mobile Authentication')
   })
 
@@ -72,6 +73,6 @@ describe('happy CLI entrypoint', () => {
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain('Background service management')
     expect(result.stdout).toContain('keeps remote sessions available when you step away from your computer')
-    expect(result.stdout).toContain('happy daemon logs')
+    expect(result.stdout).toContain('hellovibe daemon logs')
   })
 })

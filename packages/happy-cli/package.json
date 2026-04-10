@@ -1,5 +1,5 @@
 {
-  "name": "happy-coder",
+  "name": "hellovibe",
   "version": "0.14.0-0",
   "description": "HelloVibe CLI for mobile-assisted AI coding with Claude, Gemini, and Codex",
   "author": "Kirill Dubovitskiy",
@@ -9,6 +9,8 @@
   "bugs": "https://github.com/dongaiqiang/hellovibe/issues",
   "repository": "dongaiqiang/hellovibe",
   "bin": {
+    "hellovibe": "./bin/happy.mjs",
+    "hellovibe-mcp": "./bin/happy-mcp.mjs",
     "happy": "./bin/happy.mjs",
     "happy-mcp": "./bin/happy-mcp.mjs"
   },

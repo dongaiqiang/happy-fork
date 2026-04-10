@@ -62,7 +62,7 @@ async function isServerHealthy(): Promise<boolean> {
     const testCredentials = existsSync(join(configuration.happyHomeDir, 'access.key'));
     if (!testCredentials) {
       console.log('[TEST] No test credentials found in', configuration.happyHomeDir);
-      console.log('[TEST] Run "happy auth login" with HAPPY_HOME_DIR=~/.happy-dev-test first');
+      console.log('[TEST] Run "hellovibe auth login" with HELLOVIBE_HOME_DIR=~/.happy-dev-test first');
       return false;
     }
     

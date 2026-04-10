@@ -603,7 +603,7 @@ export const ca: TranslationStructure = {
         cliVersionOutdated: 'Actualització del CLI requerida',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
             `Versió ${currentVersion} instal·lada. Actualitzeu a ${requiredVersion} o posterior`,
-        updateCliInstructions: 'Actualitza HelloVibe CLI amb l\'ordre d\'instal·lació actual: npm install -g happy-coder@latest',
+        updateCliInstructions: 'Actualitza HelloVibe CLI amb l\'ordre d\'instal·lació actual: npm install -g hellovibe@latest',
         enabled: 'Enabled',
         disabled: 'Disabled',
         sandboxIsolation: ({ value }: { value: string }) => `isolation=${value}`,
@@ -691,6 +691,13 @@ export const ca: TranslationStructure = {
         },
         context: {
             remaining: ({ percent }: { percent: number }) => `${percent}% restant`,
+        },
+        voiceInput: {
+            listeningNew: 'La transcripció en temps real està activa. Toca Atura quan aquest esborrany estigui complet.',
+            listeningAppend: 'S\'està continuant l\'esborrany actual. La nova veu s\'afegirà després del text existent.',
+            readyToContinue: 'Aquesta ronda s\'ha acabat automàticament. Toca el micròfon per continuar afegint contingut a l\'esborrany actual.',
+            readyToSend: 'L\'esborrany s\'ha conservat. El pots enviar ara o continuar editant-lo.',
+            sendDraft: 'Envia',
         },
         suggestion: {
             fileLabel: 'FITXER',
@@ -986,7 +993,7 @@ export const ca: TranslationStructure = {
 
     machine: {
         offlineUnableToSpawn: 'El llançador està desactivat mentre la màquina està fora de línia',
-        offlineHelp: '• Assegura\'t que l\'ordinador estigui en línia\n• Executa l\'ordre de comprovació d\'estat de HelloVibe CLI: `happy daemon status`\n• Si cal, actualitza el paquet actual de HelloVibe CLI amb `npm install -g happy-coder@latest`',
+        offlineHelp: '• Assegura\'t que l\'ordinador estigui en línia\n• Executa l\'ordre de comprovació d\'estat de HelloVibe CLI: `hellovibe daemon status`\n• Si cal, actualitza el paquet actual de HelloVibe CLI amb `npm install -g hellovibe@latest`',
         launchNewSessionInDirectory: 'Inicia una nova sessió al directori',
         daemon: 'Servei en segon pla',
         status: 'Estat',

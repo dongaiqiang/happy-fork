@@ -27,11 +27,11 @@ yarn link:dev      # Create happy-dev symlink
 yarn unlink:dev    # Remove happy-dev symlink
 ```
 
-This creates a `happy-dev` command in your PATH pointing to your local build, while leaving any npm-installed `happy` command untouched.
+This creates a `happy-dev` command in your PATH pointing to your local build, while leaving any npm-installed `hellovibe` command untouched.
 
 | Command | Runs |
 |---------|------|
-| `happy` | Stable npm version (from `npm install -g happy-coder`) |
+| `hellovibe` | Stable npm version (from `npm install -g hellovibe`) |
 | `happy-dev` | Local development version (from this repo) |
 
 **Note:** Run `yarn build` before `yarn link:dev` to ensure the binary exists.

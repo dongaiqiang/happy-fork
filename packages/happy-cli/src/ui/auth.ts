@@ -282,7 +282,7 @@ export async function authAndSetupMachineIfNeeded(options: {
 
     if (!credentials) {
         if (options.interactive === false) {
-            throw new Error('HelloVibe is not signed in on this computer yet. Run "happy auth login" first, then retry starting the background service.');
+            throw new Error('HelloVibe is not signed in on this computer yet. Run "hellovibe auth login" first, then retry starting the background service.');
         }
         logger.debug('[AUTH] No credentials found, starting authentication flow...');
         const authResult = await doAuth();

@@ -603,7 +603,7 @@ export const pt: TranslationStructure = {
         cliVersionOutdated: 'Atualização do CLI necessária',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
             `Versão ${currentVersion} instalada. Atualize para ${requiredVersion} ou posterior`,
-        updateCliInstructions: 'Atualize o HelloVibe CLI com o comando de instalação atual: npm install -g happy-coder@latest',
+        updateCliInstructions: 'Atualize o HelloVibe CLI com o comando de instalação atual: npm install -g hellovibe@latest',
         enabled: 'Enabled',
         disabled: 'Disabled',
         sandboxIsolation: ({ value }: { value: string }) => `isolation=${value}`,
@@ -691,6 +691,13 @@ export const pt: TranslationStructure = {
         },
         context: {
             remaining: ({ percent }: { percent: number }) => `${percent}% restante`,
+        },
+        voiceInput: {
+            listeningNew: 'A transcrição em tempo real está ativa. Toque em parar quando este rascunho estiver completo.',
+            listeningAppend: 'Você está continuando o rascunho atual. A nova fala será adicionada depois do texto existente.',
+            readyToContinue: 'Esta rodada terminou automaticamente. Toque no microfone para continuar adicionando conteúdo ao rascunho atual.',
+            readyToSend: 'O rascunho foi preservado. Você pode enviá-lo agora ou continuar editando.',
+            sendDraft: 'Enviar',
         },
         suggestion: {
             fileLabel: 'ARQUIVO',
@@ -986,7 +993,7 @@ export const pt: TranslationStructure = {
 
     machine: {
         offlineUnableToSpawn: 'Inicializador desativado enquanto a máquina está offline',
-        offlineHelp: '• Verifique se seu computador está online\n• Execute o comando de status do HelloVibe CLI: `happy daemon status`\n• Se precisar, atualize o pacote atual do HelloVibe CLI com `npm install -g happy-coder@latest`',
+        offlineHelp: '• Verifique se seu computador está online\n• Execute o comando de status do HelloVibe CLI: `hellovibe daemon status`\n• Se precisar, atualize o pacote atual do HelloVibe CLI com `npm install -g hellovibe@latest`',
         launchNewSessionInDirectory: 'Iniciar nova sessão no diretório',
         daemon: 'Serviço em segundo plano',
         status: 'Status',

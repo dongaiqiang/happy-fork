@@ -2,12 +2,12 @@
  * Design decisions:
  * - Logging should be done only through file for debugging, otherwise we might disturb the claude session when in interactive mode
  * - Use info for logs that are useful to the user - this is our UI
- * - File output location: ~/.handy/logs/<date time in local timezone>.log
+ * - File output location: $HAPPY_HOME_DIR/logs/<date time in local timezone>.log (defaults to ~/.happy/logs)
  */
 
 import chalk from 'chalk'
 import { appendFileSync } from 'fs'
-import { configuration } from '@/configuration'
+import { configuration, readBrandEnv } from '@/configuration'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, basename } from 'node:path'
 // Note: readDaemonState is imported lazily inside listDaemonLogFiles() to avoid
@@ -52,9 +52,10 @@ class Logger {
     public readonly logFilePath = getSessionLogPath()
   ) {
     // Remote logging enabled only when explicitly set with server URL
+    const remoteLoggingServerUrl = readBrandEnv('HELLOVIBE_SERVER_URL', 'HAPPY_SERVER_URL')
     if (process.env.DANGEROUSLY_LOG_TO_SERVER_FOR_AI_AUTO_DEBUGGING 
-      && process.env.HAPPY_SERVER_URL) {
-      this.dangerouslyUnencryptedServerLoggingUrl = process.env.HAPPY_SERVER_URL
+      && remoteLoggingServerUrl) {
+      this.dangerouslyUnencryptedServerLoggingUrl = remoteLoggingServerUrl
       console.log(chalk.yellow('[REMOTE LOGGING] Sending logs to server for AI debugging'))
     }
   }

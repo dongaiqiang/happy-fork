@@ -37,7 +37,7 @@ export const initialMachineMetadata: MachineMetadata = {
 // Get environment variables for a profile, filtered for agent compatibility
 async function getProfileEnvironmentVariablesForAgent(
   profileId: string,
-  agentType: 'claude' | 'codex' | 'gemini'
+  agentType: 'claude' | 'codex' | 'gemini' | 'opencode'
 ): Promise<Record<string, string>> {
   try {
     const settings = await readSettings();
@@ -67,6 +67,44 @@ async function getProfileEnvironmentVariablesForAgent(
 
 function shellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+const SHELL_PROCESS_NAMES = new Set(['bash', 'dash', 'fish', 'ksh', 'login', 'sh', 'tcsh', 'zsh']);
+
+export function classifyHostedTmuxResumeTarget(probe: {
+  targetExists: boolean;
+  paneDead?: boolean;
+  paneCurrentCommand?: string | null;
+}) {
+  if (!probe.targetExists) {
+    return {
+      reusable: false,
+      reason: 'tmux-target-missing'
+    } as const;
+  }
+  if (probe.paneDead) {
+    return {
+      reusable: false,
+      reason: 'tmux-pane-dead'
+    } as const;
+  }
+  const paneCurrentCommand = probe.paneCurrentCommand?.trim().toLowerCase() ?? '';
+  if (!paneCurrentCommand) {
+    return {
+      reusable: false,
+      reason: 'tmux-pane-command-unknown'
+    } as const;
+  }
+  if (SHELL_PROCESS_NAMES.has(paneCurrentCommand)) {
+    return {
+      reusable: false,
+      reason: 'tmux-pane-shell-prompt'
+    } as const;
+  }
+  return {
+    reusable: true,
+    reason: 'tmux-pane-has-live-process'
+  } as const;
 }
 
 export function buildTmuxHostedClaudeCommandArgs(entrypoint: string, options: {
@@ -110,6 +148,61 @@ export function buildOpenInMacClaudeCommandArgs(entrypoint: string, options: {
     'terminal',
     ...(options.happySessionId ? ['--happy-session-id', shellSingleQuote(options.happySessionId)] : []),
     ...(options.resumeId ? ['--resume', shellSingleQuote(options.resumeId)] : [])
+  ];
+}
+
+export function resolveOpenCodeModelId(env: Record<string, string>): string | undefined {
+  const model = env.OPENAI_MODEL?.trim();
+  if (!model) {
+    return undefined;
+  }
+  return `openai/${model}`;
+}
+
+export function buildOpenCodeConfigContent(env: Record<string, string>): string | undefined {
+  const baseURL = env.OPENAI_BASE_URL?.trim();
+  const model = resolveOpenCodeModelId(env);
+  const smallModelSource = env.OPENAI_SMALL_FAST_MODEL?.trim() || env.CODEX_SMALL_FAST_MODEL?.trim();
+  const smallModel = smallModelSource ? `openai/${smallModelSource}` : undefined;
+
+  if (!baseURL && !model && !smallModel) {
+    return undefined;
+  }
+
+  const config: Record<string, unknown> = {
+    $schema: 'https://opencode.ai/config.json',
+  };
+
+  if (model) {
+    config.model = model;
+  }
+
+  if (smallModel) {
+    config.small_model = smallModel;
+  }
+
+  if (baseURL) {
+    config.provider = {
+      openai: {
+        options: {
+          baseURL,
+        },
+      },
+    };
+  }
+
+  return JSON.stringify(config);
+}
+
+export function buildAcpCommandArgs(agentName: 'gemini' | 'opencode', options?: {
+  startedBy?: 'daemon' | 'terminal';
+  model?: string;
+}) {
+  return [
+    'acp',
+    agentName,
+    '--started-by',
+    options?.startedBy ?? 'daemon'
   ];
 }
 
@@ -353,6 +446,63 @@ export async function startDaemon(): Promise<void> {
     };
     const openInMacLogsDir = join(configuration.happyHomeDir, 'logs', 'open-in-mac');
     const resumeLogPath = (resumeId: string): string => join(openInMacLogsDir, `${resumeId}.log`);
+    const inspectHostedTmuxResumeTarget = async (sessionIdentifier: string) => {
+      try {
+        const parsed = parseTmuxSessionIdentifier(sessionIdentifier);
+        if (!parsed.window) {
+          return {
+            reusable: false,
+            reason: 'tmux-target-missing-window'
+          } as const;
+        }
+        const tmux = getTmuxUtilities(parsed.session);
+        const panes = await tmux.executeTmuxCommand(
+          ['list-panes', '-F', '#S|#W|#P|#{pane_dead}|#{pane_current_command}'],
+          parsed.session
+        );
+        if (!panes || panes.returncode !== 0) {
+          return {
+            reusable: false,
+            reason: 'tmux-target-missing'
+          } as const;
+        }
+        const matchingPane = panes.stdout
+          .split('\n')
+          .map(line => line.trim())
+          .filter(Boolean)
+          .map(line => {
+            const [session, window, pane, paneDeadValue, paneCurrentCommand = ''] = line.split('|');
+            return { session, window, pane, paneDeadValue, paneCurrentCommand };
+          })
+          .find(candidate => (
+            candidate.session === parsed.session
+            && candidate.window === parsed.window
+            && (parsed.pane ? candidate.pane === parsed.pane : true)
+          ));
+        if (!matchingPane) {
+          return {
+            reusable: false,
+            reason: 'tmux-target-missing'
+          } as const;
+        }
+        const paneCurrentInput = await tmux.captureCurrentInput(parsed.session, parsed.window, parsed.pane);
+        return {
+          ...classifyHostedTmuxResumeTarget({
+            targetExists: true,
+            paneDead: matchingPane.paneDeadValue === '1',
+            paneCurrentCommand: matchingPane.paneCurrentCommand
+          }),
+          paneCurrentCommand: matchingPane.paneCurrentCommand,
+          paneCurrentInput
+        } as const;
+      } catch (error) {
+        logger.debug('[DAEMON RUN] Failed to inspect hosted tmux resume target', error);
+        return {
+          reusable: false,
+          reason: 'tmux-target-invalid'
+        } as const;
+      }
+    };
     const tryOpenTerminalForResumeView = (
       directory: string,
       resumeId: string,
@@ -362,7 +512,9 @@ export async function startDaemon(): Promise<void> {
         return;
       }
       const envLines = buildShellExportLines({
+        HELLOVIBE_HOME_DIR: configuration.happyHomeDir,
         HAPPY_HOME_DIR: configuration.happyHomeDir,
+        HELLOVIBE_SERVER_URL: configuration.serverUrl,
         HAPPY_SERVER_URL: configuration.serverUrl
       });
       const monitorHint = options?.happySessionId
@@ -380,9 +532,17 @@ export async function startDaemon(): Promise<void> {
           const parsed = parseTmuxSessionIdentifier(options.tmuxSessionId);
           const targetSession = parsed.session;
           const targetWindow = parsed.window ? `${parsed.session}:${parsed.window}` : parsed.session;
+          const targetPane = parsed.pane ? `${targetWindow}.${parsed.pane}` : targetWindow;
+          const targetExistsCommand = parsed.window
+            ? (parsed.pane
+              ? `tmux list-panes -t ${shellSingleQuote(targetSession)} -F ${shellSingleQuote('#W.#P')} | grep -Fx ${shellSingleQuote(`${parsed.window}.${parsed.pane}`)} >/dev/null`
+              : `tmux list-panes -t ${shellSingleQuote(targetSession)} -F ${shellSingleQuote('#W')} | grep -Fx ${shellSingleQuote(parsed.window)} >/dev/null`)
+            : `tmux has-session -t ${shellSingleQuote(targetSession)} 2>/dev/null`;
           return [
             `tmux has-session -t ${shellSingleQuote(targetSession)} 2>/dev/null`,
-            `tmux select-window -t ${shellSingleQuote(targetWindow)} 2>/dev/null || true`,
+            targetExistsCommand,
+            `tmux select-window -t ${shellSingleQuote(targetWindow)} 2>/dev/null`,
+            ...(parsed.pane ? [`tmux select-pane -t ${shellSingleQuote(targetPane)} 2>/dev/null`] : []),
             `tmux attach -t ${shellSingleQuote(targetSession)}`
           ].join(' && ');
         } catch {
@@ -409,7 +569,7 @@ export async function startDaemon(): Promise<void> {
         options?.pid
           ? `ps -p ${options.pid} -o pid=,ppid=,tty=,etime=,command= || true`
           : `echo ${shellSingleQuote('No PID available for this resumed session')}`,
-        `yarn workspace happy-coder cli daemon list || true`,
+        `yarn workspace hellovibe cli daemon list || true`,
         tmuxAttachCommand
           ? `echo ${shellSingleQuote(`Attaching tmux session: ${tmuxSessionLabel}`)}`
           : `echo ${shellSingleQuote('tmux unavailable for this session, falling back to log tail')}`,
@@ -427,7 +587,9 @@ export async function startDaemon(): Promise<void> {
         Object.entries(extraEnv).filter(([key]) => !key.startsWith('TMUX_'))
       );
       const envLines = buildShellExportLines({
+        HELLOVIBE_HOME_DIR: configuration.happyHomeDir,
         HAPPY_HOME_DIR: configuration.happyHomeDir,
+        HELLOVIBE_SERVER_URL: configuration.serverUrl,
         HAPPY_SERVER_URL: configuration.serverUrl,
         ...directLaunchEnv
       });
@@ -454,7 +616,13 @@ export async function startDaemon(): Promise<void> {
 
       const { directory, sessionId, happySessionId, tmuxSessionId, machineId, openTerminal = false, approvedNewDirectoryCreation = true } = options;
       const resumeSessionId = typeof sessionId === 'string' && sessionId.trim() ? sessionId.trim() : undefined;
-      const selectedAgent = options.agent === 'gemini' ? 'gemini' : (options.agent === 'codex' ? 'codex' : 'claude');
+      const selectedAgent = options.agent === 'gemini'
+        ? 'gemini'
+        : options.agent === 'opencode'
+          ? 'opencode'
+          : options.agent === 'codex'
+            ? 'codex'
+            : 'claude';
       const requestedTerminalCarrierMode = resolveRequestedTerminalCarrierMode({
         openTerminal,
         terminalCarrierMode: options.terminalCarrierMode
@@ -520,7 +688,7 @@ export async function startDaemon(): Promise<void> {
         // Layer 1: Resolve authentication token if provided
         const authEnv: Record<string, string> = {};
         if (options.token) {
-          if (options.agent === 'codex') {
+          if (selectedAgent === 'codex') {
 
             // Create a temporary directory for Codex
             const codexHomeDir = tmp.dirSync();
@@ -530,7 +698,7 @@ export async function startDaemon(): Promise<void> {
 
             // Set the environment variable for Codex
             authEnv.CODEX_HOME = codexHomeDir.name;
-          } else { // Assuming claude
+          } else if (selectedAgent === 'claude') {
             authEnv.CLAUDE_CODE_OAUTH_TOKEN = options.token;
           }
         }
@@ -578,6 +746,20 @@ export async function startDaemon(): Promise<void> {
         extraEnv = expandEnvironmentVariables(extraEnv, process.env);
         logger.debug(`[DAEMON RUN] After variable expansion: ${Object.keys(extraEnv).join(', ')}`);
 
+        const openCodeModel = selectedAgent === 'opencode'
+          ? resolveOpenCodeModelId(extraEnv)
+          : undefined;
+        const openCodeConfigContent = selectedAgent === 'opencode'
+          ? buildOpenCodeConfigContent(extraEnv)
+          : undefined;
+        if (openCodeConfigContent) {
+          extraEnv = {
+            ...extraEnv,
+            OPENCODE_CONFIG_CONTENT: openCodeConfigContent
+          };
+          logger.debug('[DAEMON RUN] Injected OPENCODE_CONFIG_CONTENT for OpenCode session');
+        }
+
         // Fail-fast validation: Check that any auth variables present are fully expanded
         // Only validate variables that are actually set (different agents need different auth)
         const potentialAuthVars = ['ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'OPENAI_API_KEY', 'CODEX_HOME', 'AZURE_OPENAI_API_KEY', 'TOGETHER_API_KEY'];
@@ -618,14 +800,25 @@ export async function startDaemon(): Promise<void> {
               errorMessage: 'Hosted Open in Mac attach requires happySessionId.'
             };
           }
-          tryOpenTerminalForResumeView(directory, resumeSessionId ?? happySessionId, {
+          const existingHostedTarget = await inspectHostedTmuxResumeTarget(tmuxSessionId);
+          if (existingHostedTarget.reusable) {
+            tryOpenTerminalForResumeView(directory, resumeSessionId ?? happySessionId, {
+              happySessionId,
+              tmuxSessionId
+            });
+            return {
+              type: 'success',
+              sessionId: happySessionId
+            };
+          }
+          logger.warn('[DAEMON RUN] Existing hosted tmux target is not reusable, creating a fresh hosted session', {
+            tmuxSessionId,
             happySessionId,
-            tmuxSessionId
+            resumeSessionId: resumeSessionId ?? null,
+            reason: existingHostedTarget.reason,
+            paneCurrentCommand: 'paneCurrentCommand' in existingHostedTarget ? existingHostedTarget.paneCurrentCommand : null,
+            paneCurrentInput: 'paneCurrentInput' in existingHostedTarget ? existingHostedTarget.paneCurrentInput : null
           });
-          return {
-            type: 'success',
-            sessionId: happySessionId
-          };
         }
 
         if (openTerminal && requestedTerminalCarrierMode === 'direct') {
@@ -750,7 +943,9 @@ export async function startDaemon(): Promise<void> {
               startingMode: tmuxStartingMode,
               startedBy: 'daemon'
             }).join(' ')
-            : `node --no-warnings --no-deprecation ${cliPath} ${selectedAgent} --happy-starting-mode ${tmuxStartingMode} --terminal-carrier tmux --started-by daemon${happySessionId ? ` --happy-session-id ${happySessionId}` : ''}${resumeSessionId ? ` --resume ${resumeSessionId}` : ''}`;
+            : selectedAgent === 'opencode'
+              ? `node --no-warnings --no-deprecation ${cliPath} ${buildAcpCommandArgs('opencode', { model: openCodeModel }).join(' ')}`
+              : `node --no-warnings --no-deprecation ${cliPath} ${selectedAgent} --happy-starting-mode ${tmuxStartingMode} --terminal-carrier tmux --started-by daemon${happySessionId ? ` --happy-session-id ${happySessionId}` : ''}${resumeSessionId ? ` --resume ${resumeSessionId}` : ''}`;
 
           // Spawn in tmux with environment variables
           // IMPORTANT: Pass complete environment (process.env + extraEnv) because:
@@ -902,23 +1097,30 @@ export async function startDaemon(): Promise<void> {
             case 'gemini':
               agentCommand = 'gemini';
               break;
+            case 'opencode':
+              agentCommand = 'opencode';
+              break;
             default:
               return {
                 type: 'error',
                 errorMessage: `Unsupported agent type: '${options.agent}'. Please update your CLI to the latest version.`
               };
           }
-          const args = [
-            agentCommand,
-            '--happy-starting-mode', 'remote',
-            '--terminal-carrier', 'fallback',
-            '--started-by', 'daemon'
-          ];
-          if (happySessionId) {
-            args.push('--happy-session-id', happySessionId);
-          }
-          if (resumeSessionId) {
-            args.push('--resume', resumeSessionId);
+          const args = selectedAgent === 'opencode'
+            ? buildAcpCommandArgs('opencode', { model: openCodeModel })
+            : [
+              agentCommand,
+              '--happy-starting-mode', 'remote',
+              '--terminal-carrier', 'fallback',
+              '--started-by', 'daemon'
+            ];
+          if (selectedAgent !== 'opencode') {
+            if (happySessionId) {
+              args.push('--happy-session-id', happySessionId);
+            }
+            if (resumeSessionId) {
+              args.push('--resume', resumeSessionId);
+            }
           }
           const happyProcess = spawnHappyCLI(args, {
             cwd: directory,
@@ -1142,7 +1344,7 @@ export async function startDaemon(): Promise<void> {
     // 2. Check if daemon needs update
     // 3. If outdated, restart with latest version
     // 4. Write heartbeat
-    const heartbeatIntervalMs = parseInt(process.env.HAPPY_DAEMON_HEARTBEAT_INTERVAL || '60000');
+    const heartbeatIntervalMs = parseInt(process.env.HELLOVIBE_DAEMON_HEARTBEAT_INTERVAL || process.env.HAPPY_DAEMON_HEARTBEAT_INTERVAL || '60000');
     let heartbeatRunning = false
     const restartOnStaleVersionAndHeartbeat = setInterval(async () => {
       if (heartbeatRunning) {

@@ -7,23 +7,27 @@ Free. Open source. Start fast from your phone or Mac.
 ## Installation
 
 ```bash
-npm install -g happy-coder
+npm install -g hellovibe
 ```
+
+Primary package: `hellovibe`  
+Primary command: `hellovibe`  
+Compatibility command aliases still accepted for now: `happy` and `happy-mcp`
 
 ## Quick Start
 
 ```bash
-happy auth login
-happy
+hellovibe auth login
+hellovibe
 ```
 
 If you want sessions to stay available when you step away from your computer, start the background service once:
 
 ```bash
-happy daemon start
+hellovibe daemon start
 ```
 
-After installation you can also run `happy --help` for a quick command overview or `happy doctor` if setup looks wrong.
+After installation you can also run `hellovibe --help` for a quick command overview or `hellovibe doctor` if setup looks wrong.
 
 ## Run From Source
 
@@ -42,7 +46,7 @@ yarn cli --help
 ### Claude (default)
 
 ```bash
-happy
+hellovibe
 ```
 
 This will:
@@ -53,7 +57,7 @@ This will:
 ### Gemini
 
 ```bash
-happy gemini
+hellovibe gemini
 ```
 
 Start a Gemini CLI session with remote control capabilities.
@@ -61,44 +65,44 @@ Start a Gemini CLI session with remote control capabilities.
 **First time setup:**
 ```bash
 # Connect your Google account
-happy connect gemini
+hellovibe connect gemini
 ```
 
 ## Commands
 
 ### Main Commands
 
-- `happy` – Start Claude Code session (default)
-- `happy gemini` – Start Gemini CLI session
-- `happy codex` – Start Codex mode
-- `happy acp` – Start a generic ACP-compatible agent
+- `hellovibe` – Start Claude Code session (default)
+- `hellovibe gemini` – Start Gemini CLI session
+- `hellovibe codex` – Start Codex mode
+- `hellovibe acp` – Start a generic ACP-compatible agent
 
 ### Utility Commands
 
-- `happy auth` – Manage sign-in for this computer
-- `happy connect` – Store AI vendor API keys in your HelloVibe account
-- `happy sandbox` – Configure sandbox runtime restrictions
-- `happy notify` – Send a push notification to your devices
-- `happy daemon` – Manage the background service used for remote sessions
-- `happy doctor` – System diagnostics & troubleshooting
+- `hellovibe auth` – Manage sign-in for this computer
+- `hellovibe connect` – Store AI vendor API keys in your HelloVibe account
+- `hellovibe sandbox` – Configure sandbox runtime restrictions
+- `hellovibe notify` – Send a push notification to your devices
+- `hellovibe daemon` – Manage the background service used for remote sessions
+- `hellovibe doctor` – System diagnostics & troubleshooting
 
 ### Connect Subcommands
 
 ```bash
-happy connect gemini     # Authenticate with Google for Gemini
-happy connect claude     # Authenticate with Anthropic
-happy connect codex      # Authenticate with OpenAI
-happy connect status     # Show connection status for all vendors
+hellovibe connect gemini     # Authenticate with Google for Gemini
+hellovibe connect claude     # Authenticate with Anthropic
+hellovibe connect codex      # Authenticate with OpenAI
+hellovibe connect status     # Show connection status for all vendors
 ```
 
 ### Gemini Subcommands
 
 ```bash
-happy gemini                      # Start Gemini session
-happy gemini model set <model>    # Set default model
-happy gemini model get            # Show current model
-happy gemini project set <id>     # Set Google Cloud Project ID (for Workspace accounts)
-happy gemini project get          # Show current Google Cloud Project ID
+hellovibe gemini                      # Start Gemini session
+hellovibe gemini model set <model>    # Set default model
+hellovibe gemini model get            # Show current model
+hellovibe gemini project set <id>     # Set Google Cloud Project ID (for Workspace accounts)
+hellovibe gemini project get          # Show current Google Cloud Project ID
 ```
 
 **Available models:** `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`
@@ -106,18 +110,18 @@ happy gemini project get          # Show current Google Cloud Project ID
 ### Generic ACP Commands
 
 ```bash
-happy acp gemini                     # Run built-in Gemini ACP command
-happy acp opencode                   # Run built-in OpenCode ACP command
-happy acp opencode --verbose         # Include raw backend/envelope logs
-happy acp -- custom-agent --flag     # Run any ACP-compatible command directly
+hellovibe acp gemini                     # Run built-in Gemini ACP command
+hellovibe acp opencode                   # Run built-in OpenCode ACP command
+hellovibe acp opencode --verbose         # Include raw backend/envelope logs
+hellovibe acp -- custom-agent --flag     # Run any ACP-compatible command directly
 ```
 
 ### Sandbox Subcommands
 
 ```bash
-happy sandbox configure  # Interactive sandbox setup wizard
-happy sandbox status     # Show current sandbox configuration
-happy sandbox disable    # Disable sandboxing
+hellovibe sandbox configure  # Interactive sandbox setup wizard
+hellovibe sandbox status     # Show current sandbox configuration
+hellovibe sandbox disable    # Disable sandboxing
 ```
 
 ## Options
@@ -139,11 +143,12 @@ happy sandbox disable    # Disable sandboxing
 
 ### HelloVibe Configuration
 
-- `HAPPY_SERVER_URL` - Custom server URL (default: https://api.easycode-ai.xyz)
-- `HAPPY_WEBAPP_URL` - Custom web app URL (default: https://app.happy.engineering)
-- `HAPPY_HOME_DIR` - Custom home directory for HelloVibe data (default: ~/.happy)
-- `HAPPY_DISABLE_CAFFEINATE` - Disable macOS sleep prevention (set to `true`, `1`, or `yes`)
-- `HAPPY_EXPERIMENTAL` - Enable experimental features (set to `true`, `1`, or `yes`)
+- `HELLOVIBE_SERVER_URL` - Custom server URL (default: https://api.easycode-ai.xyz)
+- `HELLOVIBE_WEBAPP_URL` - Custom web app URL (default: https://app.hellovibe.com)
+- `HELLOVIBE_HOME_DIR` - Custom home directory for HelloVibe data (default: ~/.happy)
+- `HELLOVIBE_DISABLE_CAFFEINATE` - Disable macOS sleep prevention (set to `true`, `1`, or `yes`)
+- `HELLOVIBE_EXPERIMENTAL` - Enable experimental features (set to `true`, `1`, or `yes`)
+- Legacy `HAPPY_*` names still work as compatibility fallbacks during migration
 
 ### Gemini Configuration
 
@@ -157,8 +162,8 @@ happy sandbox disable    # Disable sandboxing
 Personal Gmail accounts work out of the box:
 
 ```bash
-happy connect gemini
-happy gemini
+hellovibe connect gemini
+hellovibe gemini
 ```
 
 ### Google Workspace Account
@@ -170,12 +175,12 @@ Google Workspace (organization) accounts require a Google Cloud Project:
 3. Set the project ID:
 
 ```bash
-happy gemini project set your-project-id
+hellovibe gemini project set your-project-id
 ```
 
 Or use environment variable:
 ```bash
-GOOGLE_CLOUD_PROJECT=your-project-id happy gemini
+GOOGLE_CLOUD_PROJECT=your-project-id hellovibe gemini
 ```
 
 **Guide:** https://goo.gle/gemini-cli-auth-docs#workspace-gca
@@ -195,13 +200,13 @@ Interested in contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) for developme
 ### For Gemini
 
 - Gemini CLI installed (`npm install -g @google/gemini-cli`)
-- Google account authenticated via `happy connect gemini`
+- Google account authenticated via `hellovibe connect gemini`
 
 ## Next Steps
 
-- Start your first session with `happy`
-- Run `happy daemon start` if you want remote sessions to stay ready in the background
-- Run `happy doctor` if authentication, linking, or startup looks off
+- Start your first session with `hellovibe`
+- Run `hellovibe daemon start` if you want remote sessions to stay ready in the background
+- Run `hellovibe doctor` if authentication, linking, or startup looks off
 
 ## License
 

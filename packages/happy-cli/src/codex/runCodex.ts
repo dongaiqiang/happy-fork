@@ -22,8 +22,7 @@ import { startHappyServer } from '@/claude/utils/startHappyServer';
 import { MessageBuffer } from "@/ui/ink/messageBuffer";
 import { CodexDisplay } from "@/ui/ink/CodexDisplay";
 import { trimIdent } from "@/utils/trimIdent";
-import type { CodexSessionConfig } from './types';
-import { CHANGE_TITLE_INSTRUCTION } from '@/gemini/constants';
+import { getCodexToolErrorMessage, type CodexSessionConfig } from './types';
 import { notifyDaemonSessionStarted } from "@/daemon/controlClient";
 import { registerKillSessionHandler } from "@/claude/registerKillSessionHandler";
 import { delay } from "@/utils/time";
@@ -99,7 +98,7 @@ export async function runCodex(opts: {
     let machineId = settings?.machineId;
     const sandboxConfig = opts.noSandbox ? undefined : settings?.sandboxConfig;
     if (!machineId) {
-        console.error('HelloVibe could not find this computer\'s local setup. Run "happy auth login --force" and try again. If it still fails, report it at https://github.com/dongaiqiang/hellovibe/issues');
+        console.error('HelloVibe could not find this computer\'s local setup. Run "hellovibe auth login --force" and try again. If it still fails, report it at https://github.com/dongaiqiang/hellovibe/issues');
         process.exit(1);
     }
     logger.debug(`Using machineId: ${machineId}`);
@@ -532,7 +531,6 @@ export async function runCodex(opts: {
             args: ['--url', happyServer.url]
         }
     } as const;
-    let first = true;
 
     try {
         logger.debug('[codex]: client.connect begin');
@@ -615,7 +613,7 @@ export async function runCodex(opts: {
 
                 if (!wasCreated) {
                     const startConfig: CodexSessionConfig = {
-                        prompt: first ? message.message + '\n\n' + CHANGE_TITLE_INSTRUCTION : message.message,
+                        prompt: message.message,
                         sandbox: executionPolicy.sandbox,
                         'approval-policy': executionPolicy.approvalPolicy,
                         config: { mcp_servers: mcpServers }
@@ -649,18 +647,27 @@ export async function runCodex(opts: {
                         (startConfig.config as any).experimental_resume = resumeFile;
                     }
                     
-                    await client.startSession(
+                    const response = await client.startSession(
                         startConfig,
                         { signal: abortController.signal }
                     );
+                    const errorMessage = getCodexToolErrorMessage(response);
+                    if (errorMessage) {
+                        messageBuffer.addMessage(`Error: ${errorMessage}`, 'result');
+                        session.sendAgentMessage('codex', { type: 'message', message: errorMessage });
+                    }
                     wasCreated = true;
-                    first = false;
                 } else {
                     const response = await client.continueSession(
                         message.message,
                         { signal: abortController.signal }
                     );
                     logger.debug('[Codex] continueSession response:', response);
+                    const errorMessage = getCodexToolErrorMessage(response);
+                    if (errorMessage) {
+                        messageBuffer.addMessage(`Error: ${errorMessage}`, 'result');
+                        session.sendAgentMessage('codex', { type: 'message', message: errorMessage });
+                    }
                 }
             } catch (error) {
                 logger.warn('Error in codex session:', error);

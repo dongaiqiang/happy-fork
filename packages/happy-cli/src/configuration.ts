@@ -43,6 +43,21 @@ const sanitizeUrlEnv = (rawValue: string | undefined, fallback: string, envName:
   }
 }
 
+export const readBrandEnv = (...envNames: string[]): string | undefined => {
+  for (const envName of envNames) {
+    const value = process.env[envName]
+    if (typeof value === 'string' && value.length > 0) {
+      return value
+    }
+  }
+  return undefined
+}
+
+export const readBooleanBrandEnv = (...envNames: string[]): boolean => {
+  const rawValue = readBrandEnv(...envNames)
+  return ['true', '1', 'yes'].includes(rawValue?.toLowerCase() || '')
+}
+
 class Configuration {
   public readonly serverUrl: string
   public readonly webappUrl: string
@@ -61,21 +76,29 @@ class Configuration {
   public readonly disableCaffeinate: boolean
 
   constructor() {
-    this.serverUrl = sanitizeUrlEnv(process.env.HAPPY_SERVER_URL, 'http://localhost:3005', 'HAPPY_SERVER_URL')
+    this.serverUrl = sanitizeUrlEnv(
+      readBrandEnv('HELLOVIBE_SERVER_URL', 'HAPPY_SERVER_URL'),
+      'http://localhost:3005',
+      readBrandEnv('HELLOVIBE_SERVER_URL') ? 'HELLOVIBE_SERVER_URL' : 'HAPPY_SERVER_URL'
+    )
     this.webappUrl = sanitizeUrlEnv(
-      process.env.HAPPY_WEBAPP_URL || process.env.EXPO_PUBLIC_SERVER_URL,
+      readBrandEnv('HELLOVIBE_WEBAPP_URL', 'HAPPY_WEBAPP_URL') || process.env.EXPO_PUBLIC_SERVER_URL,
       'http://localhost:8083',
-      process.env.HAPPY_WEBAPP_URL ? 'HAPPY_WEBAPP_URL' : 'EXPO_PUBLIC_SERVER_URL'
+      readBrandEnv('HELLOVIBE_WEBAPP_URL')
+        ? 'HELLOVIBE_WEBAPP_URL'
+        : readBrandEnv('HAPPY_WEBAPP_URL')
+          ? 'HAPPY_WEBAPP_URL'
+          : 'EXPO_PUBLIC_SERVER_URL'
     )
 
     // Check if we're running as daemon based on process args
     const args = process.argv.slice(2)
     this.isDaemonProcess = args.length >= 2 && args[0] === 'daemon' && (args[1] === 'start-sync')
 
-    // Directory configuration - Priority: HAPPY_HOME_DIR env > default home dir
-    if (process.env.HAPPY_HOME_DIR) {
+    const homeDirOverride = readBrandEnv('HELLOVIBE_HOME_DIR', 'HAPPY_HOME_DIR')
+    if (homeDirOverride) {
       // Expand ~ to home directory if present
-      const expandedPath = process.env.HAPPY_HOME_DIR.replace(/^~/, homedir())
+      const expandedPath = homeDirOverride.replace(/^~/, homedir())
       this.happyHomeDir = expandedPath
     } else {
       this.happyHomeDir = join(homedir(), '.happy')
@@ -87,15 +110,15 @@ class Configuration {
     this.daemonStateFile = join(this.happyHomeDir, 'daemon.state.json')
     this.daemonLockFile = join(this.happyHomeDir, 'daemon.state.json.lock')
 
-    this.isExperimentalEnabled = ['true', '1', 'yes'].includes(process.env.HAPPY_EXPERIMENTAL?.toLowerCase() || '');
-    this.disableCaffeinate = ['true', '1', 'yes'].includes(process.env.HAPPY_DISABLE_CAFFEINATE?.toLowerCase() || '');
+    this.isExperimentalEnabled = readBooleanBrandEnv('HELLOVIBE_EXPERIMENTAL', 'HAPPY_EXPERIMENTAL')
+    this.disableCaffeinate = readBooleanBrandEnv('HELLOVIBE_DISABLE_CAFFEINATE', 'HAPPY_DISABLE_CAFFEINATE')
 
     this.currentCliVersion = packageJson.version
 
     // Validate variant configuration
-    const variant = process.env.HAPPY_VARIANT || 'stable'
+    const variant = readBrandEnv('HELLOVIBE_VARIANT', 'HAPPY_VARIANT') || 'stable'
     if (variant === 'dev' && !this.happyHomeDir.includes('dev')) {
-      console.warn('⚠️  WARNING: HAPPY_VARIANT=dev but HAPPY_HOME_DIR does not contain "dev"')
+      console.warn('⚠️  WARNING: HELLOVIBE_VARIANT=dev but HELLOVIBE_HOME_DIR does not contain "dev"')
       console.warn(`   Current: ${this.happyHomeDir}`)
       console.warn(`   Expected: Should contain "dev" (e.g., ~/.happy-dev)`)
     }

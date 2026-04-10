@@ -35,13 +35,13 @@ export async function handleAuthCommand(args: string[]): Promise<void> {
 
 function showAuthHelp(): void {
   console.log(`
-${chalk.bold('happy auth')} - Sign in and device access
+${chalk.bold('hellovibe auth')} - Sign in and device access
 
 ${chalk.bold('Usage:')}
-  happy auth login [--force]    Sign in to HelloVibe on this computer
-  happy auth logout             Remove sign-in and local machine data
-  happy auth status             Show current sign-in status
-  happy auth help               Show this help message
+  hellovibe auth login [--force]    Sign in to HelloVibe on this computer
+  hellovibe auth logout             Remove sign-in and local machine data
+  hellovibe auth status             Show current sign-in status
+  hellovibe auth help               Show this help message
 
 ${chalk.bold('Options:')}
   --force    Clear credentials, machine ID, and stop the background service before signing in again
@@ -93,7 +93,7 @@ async function handleAuthLogin(args: string[]): Promise<void> {
       console.log(chalk.green('✓ Already authenticated'));
       console.log(chalk.gray(`  Machine ID: ${settings.machineId}`));
       console.log(chalk.gray(`  Host: ${os.hostname()}`));
-      console.log(chalk.gray(`  Use 'happy auth login --force' to re-authenticate`));
+      console.log(chalk.gray(`  Use 'hellovibe auth login --force' to re-authenticate`));
       return;
     } else if (existingCreds && !settings?.machineId) {
       console.log(chalk.yellow('⚠️  Credentials exist but machine ID is missing'));
@@ -108,8 +108,8 @@ async function handleAuthLogin(args: string[]): Promise<void> {
     const result = await authAndSetupMachineIfNeeded();
     console.log(chalk.green('\n✓ Authentication successful'));
     console.log(chalk.gray(`  Machine ID: ${result.machineId}`));
-    console.log(chalk.gray('  Next step: run "happy" to start your first session'));
-    console.log(chalk.gray('  Optional: run "happy daemon start" if you want remote sessions to stay ready in the background'));
+    console.log(chalk.gray('  Next step: run "hellovibe" to start your first session'));
+    console.log(chalk.gray('  Optional: run "hellovibe daemon start" if you want remote sessions to stay ready in the background'));
   } catch (error) {
     console.error(chalk.red('Authentication failed:'), error instanceof Error ? error.message : 'Unknown error');
     process.exit(1);
@@ -156,7 +156,7 @@ async function handleAuthLogout(): Promise<void> {
       }
 
       console.log(chalk.green('✓ Successfully logged out'));
-      console.log(chalk.gray('  Run "happy auth login" to authenticate again'));
+      console.log(chalk.gray('  Run "hellovibe auth login" to authenticate again'));
     } catch (error) {
       throw new Error(`Failed to logout: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -173,7 +173,7 @@ async function handleAuthStatus(): Promise<void> {
 
   if (!credentials) {
     console.log(chalk.red('✗ Not authenticated'));
-    console.log(chalk.gray('  Run "happy auth login" to sign in'));
+    console.log(chalk.gray('  Run "hellovibe auth login" to sign in'));
     return;
   }
 
@@ -190,7 +190,7 @@ async function handleAuthStatus(): Promise<void> {
     console.log(chalk.gray(`  Host: ${os.hostname()}`));
   } else {
     console.log(chalk.yellow('⚠️  Machine not registered'));
-    console.log(chalk.gray('  Run "happy auth login --force" to fix this'));
+    console.log(chalk.gray('  Run "hellovibe auth login --force" to fix this'));
   }
 
   // Data location
@@ -203,7 +203,7 @@ async function handleAuthStatus(): Promise<void> {
       console.log(chalk.green('✓ Background service running'));
     } else {
       console.log(chalk.gray('✗ Background service not running'));
-      console.log(chalk.gray('  Run "happy daemon start" if you want sessions to stay available when you step away'));
+      console.log(chalk.gray('  Run "hellovibe daemon start" if you want sessions to stay available when you step away'));
     }
   } catch {
     console.log(chalk.gray('✗ Background service not running'));

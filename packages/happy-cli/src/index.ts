@@ -33,7 +33,7 @@ import { extractNoSandboxFlag } from './utils/sandboxFlags'
 
 function printCommandError(commandLabel: string, error: unknown, suggestions: string[] = []) {
   const message = error instanceof Error ? error.message : 'Unknown error'
-  const hintLines = suggestions.length > 0 ? suggestions : ['Run "happy doctor" for diagnostics.']
+  const hintLines = suggestions.length > 0 ? suggestions : ['Run "hellovibe doctor" for diagnostics.']
   console.error(chalk.red(`${commandLabel} failed:`), message)
   hintLines.forEach((hint) => {
     console.error(chalk.gray(`  ${hint}`))
@@ -76,8 +76,8 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
       await handleAuthCommand(args.slice(1));
     } catch (error) {
       printCommandError('Authentication command', error, [
-        'Run "happy auth --help" to review available sign-in commands.',
-        'Run "happy doctor" if sign-in still does not work.'
+        'Run "hellovibe auth --help" to review available sign-in commands.',
+        'Run "hellovibe doctor" if sign-in still does not work.'
       ])
       process.exit(1)
     }
@@ -87,8 +87,8 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
       await handleConnectCommand(args.slice(1));
     } catch (error) {
       printCommandError('Connect command', error, [
-        'Run "happy connect --help" to review available provider commands.',
-        'Run "happy doctor" if the problem continues.'
+        'Run "hellovibe connect --help" to review available provider commands.',
+        'Run "hellovibe doctor" if the problem continues.'
       ])
       process.exit(1)
     }
@@ -98,8 +98,8 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
       await handleSandboxCommand(args.slice(1));
     } catch (error) {
       printCommandError('Sandbox command', error, [
-        'Run "happy sandbox --help" to review sandbox options.',
-        'Run "happy doctor" if the sandbox still fails to start.'
+        'Run "hellovibe sandbox --help" to review sandbox options.',
+        'Run "hellovibe doctor" if the sandbox still fails to start.'
       ])
       process.exit(1)
     }
@@ -127,8 +127,8 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
       await runCodex({credentials, startedBy, noSandbox: codexArgs.noSandbox});
     } catch (error) {
       printCommandError('Codex session', error, [
-        'Run "happy auth login" if this computer is not signed in yet.',
-        'Run "happy doctor" if the session still cannot start.'
+        'Run "hellovibe auth login" if this computer is not signed in yet.',
+        'Run "hellovibe doctor" if the session still cannot start.'
       ])
       process.exit(1)
     }
@@ -286,7 +286,7 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
           console.log('No Google Cloud Project configured.');
           console.log('');
           console.log('If you see "Authentication required" error, you may need to set a project:');
-          console.log('  happy gemini project set <your-project-id>');
+          console.log('  hellovibe gemini project set <your-project-id>');
           console.log('');
           console.log('This is required for Google Workspace accounts.');
           console.log('Guide: https://goo.gle/gemini-cli-auth-docs#workspace-gca');
@@ -300,7 +300,7 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
     
     // Handle "happy gemini project" (no subcommand) - show help
     if (geminiSubcommand === 'project' && !args[2]) {
-      console.log('Usage: happy gemini project <command>');
+      console.log('Usage: hellovibe gemini project <command>');
       console.log('');
       console.log('Commands:');
       console.log('  set <project-id>   Set Google Cloud Project ID');
@@ -330,9 +330,9 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
       } = await authAndSetupMachineIfNeeded();
 
       // Auto-start daemon for gemini (same as claude)
-      logger.debug('Ensuring Happy background service is running & matches our version...');
+      logger.debug('Ensuring HelloVibe background service is running & matches our version...');
       if (!(await isDaemonRunningCurrentlyInstalledHappyVersion())) {
-        logger.debug('Starting Happy background service...');
+        logger.debug('Starting HelloVibe background service...');
         const daemonProcess = spawnHappyCLI(['daemon', 'start-sync'], {
           detached: true,
           stdio: 'ignore',
@@ -345,8 +345,8 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
       await runGemini({credentials, startedBy});
     } catch (error) {
       printCommandError('Gemini session', error, [
-        'Run "happy connect gemini" if your Google account is not linked yet.',
-        'Run "happy doctor" if the session still cannot start.'
+        'Run "hellovibe connect gemini" if your Google account is not linked yet.',
+        'Run "hellovibe doctor" if the session still cannot start.'
       ])
       process.exit(1)
     }
@@ -377,9 +377,9 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
       const resolved = resolveAcpAgentConfig(acpArgs);
       const { credentials } = await authAndSetupMachineIfNeeded();
 
-      logger.debug('Ensuring Happy background service is running & matches our version...');
+      logger.debug('Ensuring HelloVibe background service is running & matches our version...');
       if (!(await isDaemonRunningCurrentlyInstalledHappyVersion())) {
-        logger.debug('Starting Happy background service...');
+        logger.debug('Starting HelloVibe background service...');
         const daemonProcess = spawnHappyCLI(['daemon', 'start-sync'], {
           detached: true,
           stdio: 'ignore',
@@ -399,20 +399,20 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
       });
     } catch (error) {
       printCommandError('ACP session', error, [
-        'Check the command you passed after "happy acp --".',
-        'Run "happy doctor" if the runner still fails.'
+        'Check the command you passed after "hellovibe acp --".',
+        'Run "hellovibe doctor" if the runner still fails.'
       ])
       process.exit(1)
     }
     return;
   } else if (subcommand === 'logout') {
     // Keep for backward compatibility - redirect to auth logout
-    console.log(chalk.yellow('Note: "happy logout" is deprecated. Use "happy auth logout" instead.\n'));
+    console.log(chalk.yellow('Note: "happy logout" is deprecated. Use "hellovibe auth logout" instead.\n'));
     try {
       await handleAuthCommand(['logout']);
     } catch (error) {
       printCommandError('Logout command', error, [
-        'Run "happy auth status" to confirm the current sign-in state.'
+        'Run "hellovibe auth status" to confirm the current sign-in state.'
       ])
       process.exit(1)
     }
@@ -423,7 +423,7 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
       await handleNotifyCommand(args.slice(1));
     } catch (error) {
       printCommandError('Notification command', error, [
-        'Run "happy notify --help" to review the required arguments.'
+        'Run "hellovibe notify --help" to review the required arguments.'
       ])
       process.exit(1)
     }
@@ -465,7 +465,7 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
     } else if (daemonSubcommand === 'start') {
       const credentials = await readCredentials()
       if (!credentials) {
-        console.error('HelloVibe is not signed in on this computer yet. Run "happy auth login" first, then run "happy daemon start" again.')
+        console.error('HelloVibe is not signed in on this computer yet. Run "hellovibe auth login" first, then run "hellovibe daemon start" again.')
         process.exit(1)
       }
 
@@ -489,10 +489,10 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
 
       if (started) {
         console.log('HelloVibe background service is ready.');
-        console.log('You can now run "happy" to start a session, or "happy daemon status" to inspect the service.');
+        console.log('You can now run "hellovibe" to start a session, or "hellovibe daemon status" to inspect the service.');
       } else {
         console.error('HelloVibe could not confirm that the background service started.');
-        console.error('Run "happy daemon logs" to check the latest log, or run "happy doctor" for a broader diagnosis.');
+        console.error('Run "hellovibe daemon logs" to check the latest log, or run "hellovibe doctor" for a broader diagnosis.');
         process.exit(1);
       }
       process.exit(0);
@@ -502,8 +502,8 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
         process.exit(0)
       } catch (error) {
         printCommandError('Background service', error, [
-          'Run "happy auth login" if this computer is not signed in yet.',
-          'Run "happy daemon logs" or "happy doctor" for more details.'
+          'Run "hellovibe auth login" if this computer is not signed in yet.',
+          'Run "hellovibe daemon logs" or "hellovibe doctor" for more details.'
         ])
         process.exit(1)
       }
@@ -528,7 +528,7 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
         await install()
       } catch (error) {
         printCommandError('Background service install', error, [
-          'Run "happy doctor" to verify platform support and local paths.'
+          'Run "hellovibe doctor" to verify platform support and local paths.'
         ])
         process.exit(1)
       }
@@ -537,27 +537,27 @@ function printCommandError(commandLabel: string, error: unknown, suggestions: st
         await uninstall()
       } catch (error) {
         printCommandError('Background service uninstall', error, [
-          'Run "happy doctor" if cleanup still looks incomplete.'
+          'Run "hellovibe doctor" if cleanup still looks incomplete.'
         ])
         process.exit(1)
       }
     } else {
       console.log(`
-${chalk.bold('happy daemon')} - Background service management
+${chalk.bold('hellovibe daemon')} - Background service management
 
 ${chalk.bold('Usage:')}
-  happy daemon start              Start the background service (detached)
-  happy daemon stop               Stop the background service (sessions stay alive)
-  happy daemon status             Show background service status
-  happy daemon list               List active sessions
-  happy daemon logs               Show the latest background service log path
+  hellovibe daemon start          Start the background service (detached)
+  hellovibe daemon stop           Stop the background service (sessions stay alive)
+  hellovibe daemon status         Show background service status
+  hellovibe daemon list           List active sessions
+  hellovibe daemon logs           Show the latest background service log path
 
   If you want to clean up all HelloVibe-related processes run 
-  ${chalk.cyan('happy doctor clean')}
+  ${chalk.cyan('hellovibe doctor clean')}
 
 ${chalk.bold('Note:')} The background service keeps remote sessions available when you step away from your computer.
 
-${chalk.bold('To clean up runaway processes:')} Use ${chalk.cyan('happy doctor clean')}
+${chalk.bold('To clean up runaway processes:')} Use ${chalk.cyan('hellovibe doctor clean')}
 `)
     }
     return;
@@ -652,43 +652,48 @@ ${chalk.bold('To clean up runaway processes:')} Use ${chalk.cyan('happy doctor c
     // Show help
     if (showHelp) {
       console.log(`
-${chalk.bold('happy')} - HelloVibe for Claude Code on the go
+${chalk.bold('hellovibe')} - HelloVibe for Claude Code on the go
 
 ${chalk.bold('Usage:')}
-  happy [options]         Start Claude with mobile control
-  happy auth              Manage authentication
-  happy codex             Start Codex mode
-  happy gemini            Start Gemini mode (ACP)
-  happy acp               Start a generic ACP-compatible agent
-  happy connect           Connect AI vendor API keys
-  happy sandbox           Configure and manage OS-level sandboxing
-  happy notify            Send push notification
-  happy daemon            Manage background service that allows
+  hellovibe [options]     Start Claude with mobile control
+  hellovibe auth          Manage authentication
+  hellovibe codex         Start Codex mode
+  hellovibe gemini        Start Gemini mode (ACP)
+  hellovibe acp           Start a generic ACP-compatible agent
+  hellovibe connect       Connect AI vendor API keys
+  hellovibe sandbox       Configure and manage OS-level sandboxing
+  hellovibe notify        Send push notification
+  hellovibe daemon        Manage background service that allows
                             to spawn new sessions away from your computer
-  happy doctor            System diagnostics & troubleshooting
+  hellovibe doctor        System diagnostics & troubleshooting
 
 ${chalk.bold('Examples:')}
-  happy                    Start session
-  happy --yolo             Start with bypassing permissions
-                            happy sugar for --dangerously-skip-permissions
-  happy --chrome           Enable Chrome browser access for this session
-  happy --no-chrome        Disable Chrome even if default is on
-  happy --no-sandbox       Disable HelloVibe sandbox for this session
-  happy --js-runtime bun   Use bun instead of node to spawn Claude Code
-  happy --claude-env ANTHROPIC_BASE_URL=http://127.0.0.1:3456
+  hellovibe                Start session
+  hellovibe --yolo         Start with bypassing permissions
+                            hellovibe sugar for --dangerously-skip-permissions
+  hellovibe --chrome       Enable Chrome browser access for this session
+  hellovibe --no-chrome    Disable Chrome even if default is on
+  hellovibe --no-sandbox   Disable HelloVibe sandbox for this session
+  hellovibe --js-runtime bun
+                            Use bun instead of node to spawn Claude Code
+  hellovibe --claude-env ANTHROPIC_BASE_URL=http://127.0.0.1:3456
                            Use a custom API endpoint (e.g., claude-code-router)
-  happy acp gemini         Start Gemini via generic ACP runner
-  happy acp -- opencode --acp
+  hellovibe acp gemini     Start Gemini via generic ACP runner
+  hellovibe acp -- opencode --acp
                            Start a custom ACP command
-  happy acp opencode --verbose
+  hellovibe acp opencode --verbose
                            Print raw ACP backend/envelope events
-  happy auth login --force Authenticate
-  happy doctor             Run diagnostics
+  hellovibe auth login --force
+                            Authenticate
+  hellovibe doctor         Run diagnostics
+
+${chalk.bold('Compatibility:')}
+  happy and happy-mcp still work as upgrade aliases during migration.
 
 ${chalk.bold('HelloVibe supports ALL Claude options!')}
-  Use any claude flag with happy as you would with claude. Our favorite:
+  Use any claude flag with hellovibe as you would with claude. Our favorite:
 
-  happy --resume
+  hellovibe --resume
 
 ${chalk.gray('─'.repeat(60))}
 ${chalk.bold.cyan('Claude Code Options (from `claude --help`):')}
@@ -708,7 +713,7 @@ ${chalk.bold.cyan('Claude Code Options (from `claude --help`):')}
 
     // Show version
     if (showVersion) {
-      console.log(`happy version: ${packageJson.version}`)
+      console.log(`hellovibe version: ${packageJson.version}`)
       process.exit(0)
     }
 
@@ -782,34 +787,34 @@ async function handleNotifyCommand(args: string[]): Promise<void> {
 
   if (showHelp) {
     console.log(`
-${chalk.bold('happy notify')} - Send notification
+${chalk.bold('hellovibe notify')} - Send notification
 
 ${chalk.bold('Usage:')}
-  happy notify -p <message> [-t <title>]    Send notification with custom message and optional title
-  happy notify -h, --help                   Show this help
+  hellovibe notify -p <message> [-t <title>]    Send notification with custom message and optional title
+  hellovibe notify -h, --help                   Show this help
 
 ${chalk.bold('Options:')}
   -p <message>    Notification message (required)
   -t <title>      Notification title (optional, defaults to "HelloVibe")
 
 ${chalk.bold('Examples:')}
-  happy notify -p "Deployment complete!"
-  happy notify -p "System update complete" -t "Server Status"
-  happy notify -t "Alert" -p "Database connection restored"
+  hellovibe notify -p "Deployment complete!"
+  hellovibe notify -p "System update complete" -t "Server Status"
+  hellovibe notify -t "Alert" -p "Database connection restored"
 `)
     return
   }
 
   if (!message) {
     console.error(chalk.red('Error: Message is required. Use -p "your message" to specify the notification text.'))
-    console.log(chalk.gray('Run "happy notify --help" for usage information.'))
+    console.log(chalk.gray('Run "hellovibe notify --help" for usage information.'))
     process.exit(1)
   }
 
   // Load credentials
   let credentials = await readCredentials()
   if (!credentials) {
-    console.error(chalk.red('Error: Not authenticated. Please run "happy auth login" first.'))
+    console.error(chalk.red('Error: Not authenticated. Please run "hellovibe auth login" first.'))
     process.exit(1)
   }
 

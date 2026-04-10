@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Cross-platform environment wrapper for happy CLI
- * Sets HAPPY_HOME_DIR and provides visual feedback
+ * Cross-platform environment wrapper for HelloVibe CLI
+ * Sets HELLOVIBE_HOME_DIR and provides visual feedback
  *
  * Usage: node scripts/env-wrapper.js <variant> <command> [...args]
  *
@@ -24,13 +24,13 @@ const VARIANTS = {
     homeDir: path.join(os.homedir(), '.happy'),
     color: '\x1b[32m', // Green
     label: '✅ STABLE',
-    serverUrl: process.env.HAPPY_SERVER_URL || 'https://api.cluster-fluster.com'
+    serverUrl: process.env.HELLOVIBE_SERVER_URL || process.env.HAPPY_SERVER_URL || 'https://api.easycode-ai.xyz'
   },
   dev: {
     homeDir: path.join(os.homedir(), '.happy-dev'),
     color: '\x1b[33m', // Yellow
     label: '🔧 DEV',
-    serverUrl: process.env.HAPPY_SERVER_URL || 'https://api.cluster-fluster.com'
+    serverUrl: process.env.HELLOVIBE_SERVER_URL || process.env.HAPPY_SERVER_URL || 'https://api.easycode-ai.xyz'
   }
 };
 
@@ -59,13 +59,16 @@ if (!fs.existsSync(config.homeDir)) {
 }
 
 // Visual feedback
-console.log(`${config.color}${config.label}\x1b[0m Happy CLI (data: ${config.homeDir})`);
+console.log(`${config.color}${config.label}\x1b[0m HelloVibe CLI (data: ${config.homeDir})`);
 
 // Set environment and execute command
 const env = {
   ...process.env,
+  HELLOVIBE_HOME_DIR: config.homeDir,
   HAPPY_HOME_DIR: config.homeDir,
+  HELLOVIBE_SERVER_URL: config.serverUrl,
   HAPPY_SERVER_URL: config.serverUrl,
+  HELLOVIBE_VARIANT: variant,
   HAPPY_VARIANT: variant, // For internal validation
 };
 

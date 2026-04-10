@@ -577,7 +577,7 @@ export const ru: TranslationStructure = {
         cliVersionOutdated: 'Требуется обновление CLI',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
             `Установлена версия ${currentVersion}. Обновите до ${requiredVersion} или новее`,
-        updateCliInstructions: 'Обновите HelloVibe CLI текущей командой установки: npm install -g happy-coder@latest',
+        updateCliInstructions: 'Обновите HelloVibe CLI текущей командой установки: npm install -g hellovibe@latest',
         enabled: 'Enabled',
         disabled: 'Disabled',
         sandboxIsolation: ({ value }: { value: string }) => `isolation=${value}`,
@@ -701,6 +701,13 @@ export const ru: TranslationStructure = {
         },
         context: {
             remaining: ({ percent }: { percent: number }) => `Осталось ${percent}%`,
+        },
+        voiceInput: {
+            listeningNew: 'Идёт распознавание речи в реальном времени. Нажмите стоп, когда этот черновик будет завершён.',
+            listeningAppend: 'Вы продолжаете текущий черновик. Новая речь будет добавлена после существующего текста.',
+            readyToContinue: 'Этот раунд завершился автоматически. Нажмите микрофон, чтобы продолжить добавлять текст в текущий черновик.',
+            readyToSend: 'Черновик сохранён. Вы можете отправить его сейчас или продолжить редактирование.',
+            sendDraft: 'Отправить',
         },
         suggestion: {
             fileLabel: 'ФАЙЛ',
@@ -984,7 +991,7 @@ export const ru: TranslationStructure = {
 
     machine: {
         offlineUnableToSpawn: 'Запуск отключен: машина offline',
-        offlineHelp: '• Убедитесь, что компьютер онлайн\n• Выполните команду проверки состояния HelloVibe CLI: `happy daemon status`\n• При необходимости обновите текущий пакет HelloVibe CLI: `npm install -g happy-coder@latest`',
+        offlineHelp: '• Убедитесь, что компьютер онлайн\n• Выполните команду проверки состояния HelloVibe CLI: `hellovibe daemon status`\n• При необходимости обновите текущий пакет HelloVibe CLI: `npm install -g hellovibe@latest`',
         launchNewSessionInDirectory: 'Запустить новую сессию в папке',
         daemon: 'Фоновый сервис',
         status: 'Статус',

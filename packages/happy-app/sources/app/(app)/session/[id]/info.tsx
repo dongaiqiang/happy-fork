@@ -8,6 +8,7 @@ import { ItemGroup } from '@/components/ItemGroup';
 import { ItemList } from '@/components/ItemList';
 import { Avatar } from '@/components/Avatar';
 import { storage, useSession, useIsDataReady, useMachine, useAllMachines } from '@/sync/storage';
+import { isSessionHandoffSwitching } from '@/utils/sessionControlUtils';
 import { getSessionName, useSessionStatus, formatOSPlatform, formatPathRelativeToHome, getSessionAvatarId } from '@/utils/sessionUtils';
 import * as Clipboard from 'expo-clipboard';
 import { Modal } from '@/modal';
@@ -223,7 +224,7 @@ function SessionInfoContent({ session }: { session: Session }) {
         }
     }, [session]);
 
-    // Use HappyAction for archiving - it handles errors automatically
+    // Use the shared action helper for archiving - it handles errors automatically
     const [archivingSession, performArchive] = useHappyAction(async () => {
         const result = await sessionKill(session.id);
         if (!result.success) {
@@ -273,7 +274,7 @@ function SessionInfoContent({ session }: { session: Session }) {
         );
     }, [performStop]);
 
-    // Use HappyAction for deletion - it handles errors automatically
+    // Use the shared action helper for deletion - it handles errors automatically
     const [deletingSession, performDelete] = useHappyAction(async () => {
         const result = await sessionDelete(session.id);
         if (!result.success) {
@@ -416,7 +417,7 @@ function SessionInfoContent({ session }: { session: Session }) {
         `controller: ${effectiveControlState?.controller || '(unknown)'}`,
         `handoffState: ${effectiveControlState?.handoffState || '(unknown)'}`
     ].join('\n');
-    const isSwitchingControl = effectiveControlState?.handoffState === 'switching';
+    const isSwitchingControl = isSessionHandoffSwitching(effectiveControlState);
     const isMacController = effectiveControlState?.controller === 'mac' && effectiveControlState?.handoffState === 'idle';
     const canSwitchControlToMac = canOpenInMac && hasTmuxOpenInMacSupport && !isSwitchingControl && !isMacController;
     const canSwitchControlToMobile = !isSwitchingControl && isMacController;
@@ -571,7 +572,7 @@ function SessionInfoContent({ session }: { session: Session }) {
     const switchingControl = switchingToMac || switchingToMobile;
 
     const handleOpenInMac = useCallback(() => {
-        if (handingOffToMac) {
+        if (handingOffToMac || isSwitchingControl) {
             Modal.alert(t('common.loading'), t('sessionInfo.openOnMacOpeningSubtitle'));
             return;
         }
@@ -588,7 +589,7 @@ function SessionInfoContent({ session }: { session: Session }) {
                 }
             ]
         );
-    }, [effectiveControlState?.controller, effectiveControlState?.handoffState, handingOffToMac, hasTmuxOpenInMacSupport, openInMacDebugDetails, openInMacResumeCommand, performHandoffToMac, session.active, session.metadata?.claudeSessionId, session.metadata?.machineId, session.metadata?.path, session.metadata?.terminalCarrier, session.metadata?.tmuxSessionId, sessionStatus.isConnected]);
+    }, [effectiveControlState?.controller, effectiveControlState?.handoffState, handingOffToMac, hasTmuxOpenInMacSupport, isSwitchingControl, openInMacDebugDetails, openInMacResumeCommand, performHandoffToMac, session.active, session.metadata?.claudeSessionId, session.metadata?.machineId, session.metadata?.path, session.metadata?.terminalCarrier, session.metadata?.tmuxSessionId, sessionStatus.isConnected]);
 
     const resumableReasonText = (() => {
         if (sessionStatus.isConnected) return t('sessionInfo.resumableReasonSessionOnline');
@@ -605,10 +606,10 @@ function SessionInfoContent({ session }: { session: Session }) {
     }, []);
 
     const handleCopyUpdateCommand = useCallback(async () => {
-        const updateCommand = 'npm install -g happy-coder@latest';
+        const updateCommand = 'npm install -g hellovibe@latest';
         try {
             await Clipboard.setStringAsync(updateCommand);
-            Modal.alert(t('common.success'), updateCommand);
+            Modal.alert(t('common.success'), t('sessionInfo.updateCliInstructions'));
         } catch (error) {
             Modal.alert(t('common.error'), t('common.error'));
         }
@@ -755,7 +756,7 @@ function SessionInfoContent({ session }: { session: Session }) {
                     {canOpenInMac && (
                         <Item
                             title={t('sessionInfo.openOnMacTitle')}
-                            subtitle={handingOffToMac
+                            subtitle={handingOffToMac || isSwitchingControl
                                 ? t('sessionInfo.openOnMacOpeningSubtitle')
                                 : hasTmuxOpenInMacSupport
                                     ? t('sessionInfo.openOnMacReadySubtitle')

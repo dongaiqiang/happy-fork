@@ -58,15 +58,15 @@ function formatBundledPlatforms(bundledPlatforms) {
 }
 
 function printNextSteps() {
-    console.log('Next steps: run "happy auth login" to sign in, then run "happy" to start your first session.');
-    console.log('If something looks wrong after install, run "happy doctor" for diagnostics.');
+    console.log('Next steps: run "hellovibe auth login" to sign in, then run "hellovibe" to start your first session.');
+    console.log('If something looks wrong after install, run "hellovibe doctor" for diagnostics.');
 }
 
 function warnUnsupportedPlatform(targetPlatform, bundledPlatforms) {
     console.warn(`HelloVibe does not include bundled tools for ${targetPlatform}.`);
     console.warn(`Bundled platforms in this package: ${formatBundledPlatforms(bundledPlatforms)}.`);
     console.warn('Installation can continue, but advanced local tooling may be unavailable on this platform.');
-    console.warn('You can still run "happy --help" and sign in. If you need full support, report your platform at https://github.com/dongaiqiang/hellovibe/issues.');
+    console.warn('You can still run "hellovibe --help" and sign in. If you need full support, report your platform at https://github.com/dongaiqiang/hellovibe/issues.');
 }
 
 /**

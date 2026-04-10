@@ -83,9 +83,9 @@ npm run start:production
 ## Visual Differences
 
 Each variant displays a different app name on your device:
-- **Development**: "Happy (dev)" - Yellow/orange theme
-- **Preview**: "Happy (preview)" - Preview theme
-- **Production**: "Happy" - Standard theme
+- **Development**: "HelloVibe (dev)" - Yellow/orange theme
+- **Preview**: "HelloVibe (preview)" - Preview theme
+- **Production**: "HelloVibe" - Standard theme
 
 This makes it easy to distinguish which version you're testing!
 
@@ -183,7 +183,7 @@ This controls:
 
 Only **production** variant has deep linking configured:
 
-- **Production**: `https://app.happy.engineering/*`
+- **Production**: `https://app.hellovibe.com/*`
 - **Development**: No deep linking
 - **Preview**: No deep linking
 
@@ -191,7 +191,7 @@ This prevents dev/preview builds from interfering with production deep links.
 
 ## Testing Connected to Different Servers
 
-You can connect different variants to different Happy CLI instances:
+You can connect different variants to different HelloVibe CLI instances:
 
 ```bash
 # Development app → Dev CLI daemon
@@ -207,14 +207,14 @@ Each app maintains separate authentication and sessions!
 
 ## Local Server Development
 
-To test with a local Happy server:
+To test with a local HelloVibe service (`happy-server`):
 
 ```bash
 npm run start:local-server
 ```
 
 This sets:
-- `EXPO_PUBLIC_HAPPY_SERVER_URL=http://localhost:3005`
+- `EXPO_PUBLIC_HELLOVIBE_SERVER_URL=http://localhost:3005`
 - `EXPO_PUBLIC_DEBUG=1`
 - Debug logging enabled
 
@@ -247,9 +247,9 @@ This shouldn't happen - each variant has a unique bundle ID. If it does:
 ### All three apps look the same
 
 Check the app name on the home screen:
-- "Happy (dev)"
-- "Happy (preview)"
-- "Happy"
+- "HelloVibe (dev)"
+- "HelloVibe (preview)"
+- "HelloVibe"
 
 If they're all the same name, the variant might not be set correctly. Verify:
 

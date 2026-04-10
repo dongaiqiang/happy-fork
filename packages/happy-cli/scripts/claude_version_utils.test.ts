@@ -349,20 +349,29 @@ describe('HAPPY_CLAUDE_PATH env var', () => {
 
   afterEach(() => {
     if (fs.existsSync(testClaudePath)) fs.unlinkSync(testClaudePath);
+    delete process.env.HELLOVIBE_CLAUDE_PATH;
     delete process.env.HAPPY_CLAUDE_PATH;
   });
 
-  it('should use HAPPY_CLAUDE_PATH when set', () => {
+  it('should use HELLOVIBE_CLAUDE_PATH when set', () => {
+    process.env.HELLOVIBE_CLAUDE_PATH = testClaudePath;
+    const result = findGlobalClaudeCliPath();
+    expect(result?.source).toBe('HELLOVIBE_CLAUDE_PATH');
+    // Use realpathSync to handle macOS symlink (/tmp -> /private/tmp)
+    expect(fs.realpathSync(result?.path ?? '')).toBe(fs.realpathSync(testClaudePath));
+  });
+
+  it('should fall back to HAPPY_CLAUDE_PATH when HELLOVIBE_CLAUDE_PATH is not set', () => {
     process.env.HAPPY_CLAUDE_PATH = testClaudePath;
     const result = findGlobalClaudeCliPath();
     expect(result?.source).toBe('HAPPY_CLAUDE_PATH');
-    // Use realpathSync to handle macOS symlink (/tmp -> /private/tmp)
     expect(fs.realpathSync(result?.path ?? '')).toBe(fs.realpathSync(testClaudePath));
   });
 
   it('should fall back to auto-discovery when env var not set', () => {
     const result = findGlobalClaudeCliPath();
     expect(result?.source).not.toBe('HAPPY_CLAUDE_PATH');
+    expect(result?.source).not.toBe('HELLOVIBE_CLAUDE_PATH');
   });
 
   it('should ignore env var if path does not exist', () => {

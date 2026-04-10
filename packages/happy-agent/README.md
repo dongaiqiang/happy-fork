@@ -1,8 +1,8 @@
-# Happy Agent
+# HelloVibe Agent
 
-CLI client for controlling Happy Coder agents remotely.
+CLI client for controlling HelloVibe agents remotely.
 
-Unlike `happy-cli` which both runs and controls agents, `happy-agent` only controls them — creating sessions, sending messages, reading history, monitoring state, and stopping sessions.
+Unlike `hellovibe` which both runs and controls agents, `happy-agent` only controls them — creating sessions, sending messages, reading history, monitoring state, and stopping sessions.
 
 ## Installation
 
@@ -20,7 +20,7 @@ cd packages/happy-agent && npm link
 
 ## Authentication
 
-Happy Agent uses account authentication via QR code, the same flow as linking a device in the Happy mobile app.
+HelloVibe Agent uses account authentication via QR code, the same flow as linking a device in the HelloVibe mobile app.
 
 ```bash
 # Authenticate by scanning QR code with the Happy mobile app
@@ -33,7 +33,7 @@ happy-agent auth status
 happy-agent auth logout
 ```
 
-Credentials are stored at `~/.happy/agent.key`.
+Credentials are stored at `~/.happy/agent.key` by default.
 
 ## Commands
 
@@ -119,8 +119,9 @@ Exit code 0 when agent becomes idle, 1 on timeout.
 
 ## Environment Variables
 
-- `HAPPY_SERVER_URL` - API server URL (default: `https://api.cluster-fluster.com`)
-- `HAPPY_HOME_DIR` - Home directory for credential storage (default: `~/.happy`)
+- `HELLOVIBE_SERVER_URL` - API server URL (default: `https://api.easycode-ai.xyz`)
+- `HELLOVIBE_HOME_DIR` - Home directory for credential storage (default: `~/.happy`)
+- Legacy `HAPPY_*` names still work as compatibility fallbacks during migration
 
 ## Session ID Matching
 
@@ -133,7 +134,7 @@ All session data is end-to-end encrypted. New sessions use AES-256-GCM with per-
 ## Requirements
 
 - Node.js >= 20.0.0
-- A Happy mobile app account for authentication
+- A HelloVibe mobile app account for authentication
 
 ## Publishing to npm
 

@@ -680,7 +680,7 @@ export const ja: TranslationStructure = {
         cliVersionOutdated: 'CLIの更新が必要',
         cliVersionOutdatedMessage: ({ currentVersion, requiredVersion }: { currentVersion: string; requiredVersion: string }) =>
             `バージョン ${currentVersion} がインストールされています。${requiredVersion} 以降に更新してください`,
-        updateCliInstructions: '現在のインストールコマンドで HelloVibe CLI を更新してください: npm install -g happy-coder@latest',
+        updateCliInstructions: '現在のインストールコマンドで HelloVibe CLI を更新してください: npm install -g hellovibe@latest',
         enabled: 'Enabled',
         disabled: 'Disabled',
         sandboxIsolation: ({ value }: { value: string }) => `isolation=${value}`,
@@ -768,6 +768,13 @@ export const ja: TranslationStructure = {
         },
         context: {
             remaining: ({ percent }: { percent: number }) => `残り ${percent}%`,
+        },
+        voiceInput: {
+            listeningNew: 'リアルタイム文字起こしを実行中です。この下書きが完了したら停止をタップしてください。',
+            listeningAppend: '現在の下書きを続けています。新しい音声は既存のテキストの後ろに追加されます。',
+            readyToContinue: 'このラウンドは自動的に終了しました。現在の下書きに続きを追加するにはマイクをタップしてください。',
+            readyToSend: '下書きは保持されています。今すぐ送信するか、そのまま編集を続けられます。',
+            sendDraft: '送信',
         },
         suggestion: {
             fileLabel: 'ファイル',
@@ -1064,7 +1071,7 @@ export const ja: TranslationStructure = {
     machine: {
         launchNewSessionInDirectory: 'ディレクトリで新しいセッションを起動',
         offlineUnableToSpawn: 'マシンがオフラインのためランチャーは無効です',
-        offlineHelp: '• コンピュータがオンラインであることを確認してください\n• HelloVibe CLI の状態確認コマンド `happy daemon status` を実行してください\n• 必要に応じて、現在の HelloVibe CLI パッケージを `npm install -g happy-coder@latest` で更新してください',
+        offlineHelp: '• コンピュータがオンラインであることを確認してください\n• HelloVibe CLI の状態確認コマンド `hellovibe daemon status` を実行してください\n• 必要に応じて、現在の HelloVibe CLI パッケージを `npm install -g hellovibe@latest` で更新してください',
         daemon: 'バックグラウンドサービス',
         status: 'ステータス',
         daemonLikelyAlive: 'likely alive',

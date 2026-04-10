@@ -48,14 +48,14 @@ export async function handleConnectCommand(args: string[]): Promise<void> {
 
 function showConnectHelp(): void {
     console.log(`
-${chalk.bold('happy connect')} - Connect AI vendor API keys to HelloVibe cloud
+${chalk.bold('hellovibe connect')} - Connect AI vendor API keys to HelloVibe cloud
 
 ${chalk.bold('Usage:')}
-  happy connect codex        Store your Codex API key in HelloVibe cloud
-  happy connect claude       Store your Anthropic API key in HelloVibe cloud
-  happy connect gemini       Store your Gemini API key in HelloVibe cloud
-  happy connect status       Show connection status for all vendors
-  happy connect help         Show this help message
+  hellovibe connect codex        Store your Codex API key in HelloVibe cloud
+  hellovibe connect claude       Store your Anthropic API key in HelloVibe cloud
+  hellovibe connect gemini       Store your Gemini API key in HelloVibe cloud
+  hellovibe connect status       Show connection status for all vendors
+  hellovibe connect help         Show this help message
 
 ${chalk.bold('Description:')}
   The connect command allows you to securely store your AI vendor API keys
@@ -63,13 +63,13 @@ ${chalk.bold('Description:')}
   without exposing your API keys locally.
 
 ${chalk.bold('Examples:')}
-  happy connect codex
-  happy connect claude
-  happy connect gemini
-  happy connect status
+  hellovibe connect codex
+  hellovibe connect claude
+  hellovibe connect gemini
+  hellovibe connect status
 
 ${chalk.bold('Notes:')} 
-  • You must be authenticated with HelloVibe first (run 'happy auth login')
+  • You must be authenticated with HelloVibe first (run 'hellovibe auth login')
   • API keys are encrypted and stored securely in HelloVibe cloud
   • You can manage your stored keys at app.hellovibe.com
 `);
@@ -82,7 +82,7 @@ async function handleConnectVendor(vendor: 'codex' | 'claude' | 'gemini', displa
     const credentials = await readCredentials();
     if (!credentials) {
         console.log(chalk.yellow('⚠️  Not authenticated with HelloVibe'));
-        console.log(chalk.gray('  Please run "happy auth login" first'));
+        console.log(chalk.gray('  Please run "hellovibe auth login" first'));
         process.exit(1);
     }
 
@@ -127,7 +127,7 @@ async function handleConnectStatus(): Promise<void> {
     const credentials = await readCredentials();
     if (!credentials) {
         console.log(chalk.yellow('⚠️  Not authenticated with HelloVibe'));
-        console.log(chalk.gray('  Please run "happy auth login" first'));
+        console.log(chalk.gray('  Please run "hellovibe auth login" first'));
         process.exit(1);
     }
 
@@ -174,8 +174,8 @@ async function handleConnectStatus(): Promise<void> {
     }
 
     console.log('');
-    console.log(chalk.gray('To connect a vendor, run: happy connect <vendor>'));
-    console.log(chalk.gray('Example: happy connect gemini'));
+    console.log(chalk.gray('To connect a vendor, run: hellovibe connect <vendor>'));
+    console.log(chalk.gray('Example: hellovibe connect gemini'));
     console.log('');
 }
 
