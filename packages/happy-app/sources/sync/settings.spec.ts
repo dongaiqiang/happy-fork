@@ -489,10 +489,28 @@ describe('settings', () => {
             expect(() => AIBackendProfileSchema.parse(profile)).not.toThrow();
         });
 
+        it('keeps built-in OpenAI profile aligned with daemon CLI environment defaults', () => {
+            const profile = getBuiltInProfile('openai');
+            expect(profile?.environmentVariables).toEqual([
+                { name: 'OPENAI_BASE_URL', value: '${OPENAI_BASE_URL:-https://api.openai.com/v1}' },
+                { name: 'OPENAI_MODEL', value: '${OPENAI_MODEL:-gpt-5-codex-high}' },
+                { name: 'OPENAI_API_TIMEOUT_MS', value: '${OPENAI_API_TIMEOUT_MS:-600000}' },
+                { name: 'OPENAI_SMALL_FAST_MODEL', value: '${OPENAI_SMALL_FAST_MODEL:-gpt-5-codex-low}' },
+                { name: 'API_TIMEOUT_MS', value: '${API_TIMEOUT_MS:-600000}' },
+                { name: 'CODEX_SMALL_FAST_MODEL', value: '${CODEX_SMALL_FAST_MODEL:-gpt-5-codex-low}' },
+            ]);
+        });
+
         it('validates built-in Azure OpenAI profile', () => {
             const profile = getBuiltInProfile('azure-openai');
             expect(profile).not.toBeNull();
             expect(() => AIBackendProfileSchema.parse(profile)).not.toThrow();
+        });
+
+        it('marks OpenAI-compatible built-in profiles as OpenCode-capable', () => {
+            expect(getBuiltInProfile('openai')?.compatibility.opencode).toBe(true);
+            expect(getBuiltInProfile('azure-openai')?.compatibility.opencode).toBe(true);
+            expect(getBuiltInProfile('anthropic')?.compatibility.opencode).toBe(false);
         });
 
         it('accepts all 7 permission modes', () => {
@@ -502,7 +520,7 @@ describe('settings', () => {
                     id: crypto.randomUUID(),
                     name: 'Test Profile',
                     defaultPermissionMode: mode,
-                    compatibility: { claude: true, codex: true },
+                    compatibility: { claude: true, codex: true, gemini: true, opencode: true },
                 };
                 expect(() => AIBackendProfileSchema.parse(profile)).not.toThrow();
             });
@@ -513,7 +531,7 @@ describe('settings', () => {
                 id: crypto.randomUUID(),
                 name: 'Test Profile',
                 defaultPermissionMode: 'invalid-mode',
-                compatibility: { claude: true, codex: true },
+                compatibility: { claude: true, codex: true, gemini: true, opencode: true },
             };
             expect(() => AIBackendProfileSchema.parse(profile)).toThrow();
         });
@@ -526,7 +544,7 @@ describe('settings', () => {
                     { name: 'VALID_VAR_123', value: 'test' },
                     { name: 'API_KEY', value: '${SECRET}' },
                 ],
-                compatibility: { claude: true, codex: true },
+                compatibility: { claude: true, codex: true, gemini: true, opencode: true },
             };
             expect(() => AIBackendProfileSchema.parse(validProfile)).not.toThrow();
         });
@@ -538,7 +556,7 @@ describe('settings', () => {
                 environmentVariables: [
                     { name: 'invalid-name', value: 'test' },
                 ],
-                compatibility: { claude: true, codex: true },
+                compatibility: { claude: true, codex: true, gemini: true, opencode: true },
             };
             expect(() => AIBackendProfileSchema.parse(invalidProfile)).toThrow();
         });
@@ -562,7 +580,7 @@ describe('settings', () => {
                         name: 'Server Profile',
                         anthropicConfig: {},
                         environmentVariables: [],
-                        compatibility: { claude: true, codex: true, gemini: true },
+                        compatibility: { claude: true, codex: true, gemini: true, opencode: true },
                         isBuiltIn: false,
                         createdAt: Date.now(),
                         updatedAt: Date.now(),
@@ -580,7 +598,7 @@ describe('settings', () => {
                         name: 'Local Profile',
                         anthropicConfig: {},
                         environmentVariables: [],
-                        compatibility: { claude: true, codex: true, gemini: true },
+                        compatibility: { claude: true, codex: true, gemini: true, opencode: true },
                         isBuiltIn: false,
                         createdAt: Date.now(),
                         updatedAt: Date.now(),
@@ -682,7 +700,7 @@ describe('settings', () => {
                     name: 'Test',
                     anthropicConfig: {},
                     environmentVariables: [],
-                    compatibility: { claude: true, codex: true, gemini: true },
+                    compatibility: { claude: true, codex: true, gemini: true, opencode: true },
                     isBuiltIn: false,
                     createdAt: Date.now(),
                     updatedAt: Date.now(),
@@ -715,7 +733,7 @@ describe('settings', () => {
                     name: 'Device B Profile',
                     anthropicConfig: {},
                     environmentVariables: [],
-                    compatibility: { claude: true, codex: true },
+                    compatibility: { claude: true, codex: true, gemini: true, opencode: true },
                     isBuiltIn: false,
                     createdAt: Date.now(),
                     updatedAt: Date.now(),
@@ -827,7 +845,7 @@ describe('settings', () => {
                     name: 'Server Profile',
                     anthropicConfig: {},
                     environmentVariables: [],
-                    compatibility: { claude: true, codex: true },
+                    compatibility: { claude: true, codex: true, gemini: true, opencode: true },
                     isBuiltIn: false,
                     createdAt: 1000,
                     updatedAt: 1000,
@@ -846,7 +864,7 @@ describe('settings', () => {
                     name: 'Local Profile',
                     anthropicConfig: {},
                     environmentVariables: [],
-                    compatibility: { claude: true, codex: true, gemini: true },
+                    compatibility: { claude: true, codex: true, gemini: true, opencode: true },
                     isBuiltIn: false,
                     createdAt: 2000,
                     updatedAt: 2000,

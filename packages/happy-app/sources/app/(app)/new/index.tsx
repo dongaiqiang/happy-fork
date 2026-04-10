@@ -25,6 +25,7 @@ import {
     getAvailablePermissionModes,
     getDefaultModelKey,
     getDefaultPermissionModeKey,
+    normalizeStoredModelKey,
     resolveCurrentOption,
 } from '@/components/modelModeOptions';
 import { AIBackendProfile, getProfileEnvironmentVariables, validateProfileForAgent } from '@/sync/settings';
@@ -40,7 +41,7 @@ import { MultiTextInput } from '@/components/MultiTextInput';
 import { isMachineOnline } from '@/utils/machineUtils';
 import { StatusDot } from '@/components/StatusDot';
 import { SearchableListSelector, SelectorConfig } from '@/components/SearchableListSelector';
-import { clearNewSessionDraft, loadNewSessionDraft, saveNewSessionDraft } from '@/sync/persistence';
+import { clearNewSessionDraft, loadNewSessionDraft, saveNewSessionDraft, type NewSessionAgentType } from '@/sync/persistence';
 
 // Simple temporary state for passing selections back from picker screens
 let onMachineSelected: (machineId: string) => void = () => { };
@@ -65,7 +66,7 @@ const useProfileMap = (profiles: AIBackendProfile[]) => {
 
 // Environment variable transformation helper
 // Returns ALL profile environment variables - daemon will use them as-is
-const transformProfileToEnvironmentVars = (profile: AIBackendProfile, agentType: 'claude' | 'codex' | 'gemini' = 'claude') => {
+const transformProfileToEnvironmentVars = (profile: AIBackendProfile, agentType: NewSessionAgentType = 'claude') => {
     // getProfileEnvironmentVariables already returns ALL env vars from profile
     // including custom environmentVariables array and provider-specific configs
     return getProfileEnvironmentVariables(profile);
@@ -372,7 +373,13 @@ function NewSessionWizard() {
         }
         return 'anthropic'; // Default to Anthropic
     });
-    const [agentType, setAgentType] = React.useState<'claude' | 'codex' | 'gemini'>(() => {
+    const selectableAgents = React.useMemo<NewSessionAgentType[]>(
+        () => experimentsEnabled
+            ? ['claude', 'codex', 'opencode', 'gemini']
+            : ['claude', 'codex', 'opencode'],
+        [experimentsEnabled]
+    );
+    const [agentType, setAgentType] = React.useState<NewSessionAgentType>(() => {
         // Check if agent type was provided in temp data
         if (tempSessionData?.agentType) {
             // Only allow gemini if experiments are enabled
@@ -381,7 +388,7 @@ function NewSessionWizard() {
             }
             return tempSessionData.agentType;
         }
-        if (lastUsedAgent === 'claude' || lastUsedAgent === 'codex') {
+        if (lastUsedAgent === 'claude' || lastUsedAgent === 'codex' || lastUsedAgent === 'opencode') {
             return lastUsedAgent;
         }
         // Only allow gemini if experiments are enabled
@@ -391,16 +398,17 @@ function NewSessionWizard() {
         return 'claude';
     });
 
-    // Agent cycling handler (for cycling through claude -> codex -> gemini)
+    // Agent cycling handler (for cycling through the supported agents)
     // Note: Does NOT persist immediately - persistence is handled by useEffect below
     const handleAgentClick = React.useCallback(() => {
         setAgentType(prev => {
-            // Cycle: claude -> codex -> gemini (if experiments) -> claude
-            if (prev === 'claude') return 'codex';
-            if (prev === 'codex') return experimentsEnabled ? 'gemini' : 'claude';
-            return 'claude';
+            const currentIndex = selectableAgents.indexOf(prev);
+            if (currentIndex === -1) {
+                return selectableAgents[0] ?? 'claude';
+            }
+            return selectableAgents[(currentIndex + 1) % selectableAgents.length] ?? 'claude';
         });
-    }, [experimentsEnabled]);
+    }, [selectableAgents]);
 
     // Persist agent selection changes (separate from setState to avoid race condition)
     // This runs after agentType state is updated, ensuring the value is stable
@@ -427,7 +435,7 @@ function NewSessionWizard() {
     const [modelMode, setModelMode] = React.useState<ModelMode | null>(() => {
         const models = getAvailableModels(agentType, null, t);
         return resolveCurrentOption(models, [
-            lastUsedModelMode,
+            normalizeStoredModelKey(agentType, lastUsedModelMode),
             getDefaultModelKey(agentType),
         ]);
     });
@@ -519,17 +527,12 @@ function NewSessionWizard() {
         const agentAvailable = cliAvailability[agentType];
 
         if (agentAvailable === false) {
-            // Current agent not available - find first available
-            const availableAgent: 'claude' | 'codex' | 'gemini' =
-                cliAvailability.claude === true ? 'claude' :
-                cliAvailability.codex === true ? 'codex' :
-                (cliAvailability.gemini === true && experimentsEnabled) ? 'gemini' :
-                'claude'; // Fallback to claude (will fail at spawn with clear error)
+            const availableAgent = selectableAgents.find((candidate) => cliAvailability[candidate] === true) ?? 'claude';
 
             console.warn(`[AgentSelection] ${agentType} not available, switching to ${availableAgent}`);
             setAgentType(availableAgent);
         }
-    }, [cliAvailability.timestamp, cliAvailability.claude, cliAvailability.codex, cliAvailability.gemini, agentType, experimentsEnabled]);
+    }, [cliAvailability.timestamp, cliAvailability.claude, cliAvailability.codex, cliAvailability.gemini, cliAvailability.opencode, agentType, selectableAgents]);
 
     // Extract all ${VAR} references from profiles to query daemon environment
     const envVarRefs = React.useMemo(() => {
@@ -545,10 +548,10 @@ function NewSessionWizard() {
     const { variables: daemonEnv } = useEnvironmentVariables(selectedMachineId, envVarRefs);
 
     // Temporary banner dismissal (X button) - resets when component unmounts or machine changes
-    const [hiddenBanners, setHiddenBanners] = React.useState<{ claude: boolean; codex: boolean; gemini: boolean }>({ claude: false, codex: false, gemini: false });
+    const [hiddenBanners, setHiddenBanners] = React.useState<Record<NewSessionAgentType, boolean>>({ claude: false, codex: false, gemini: false, opencode: false });
 
     // Helper to check if CLI warning has been dismissed (checks both global and per-machine)
-    const isWarningDismissed = React.useCallback((cli: 'claude' | 'codex' | 'gemini'): boolean => {
+    const isWarningDismissed = React.useCallback((cli: NewSessionAgentType): boolean => {
         // Check global dismissal first
         if (dismissedCLIWarnings.global?.[cli] === true) return true;
         // Check per-machine dismissal
@@ -557,7 +560,7 @@ function NewSessionWizard() {
     }, [selectedMachineId, dismissedCLIWarnings]);
 
     // Unified dismiss handler for all three button types (easy to use correctly, hard to use incorrectly)
-    const handleCLIBannerDismiss = React.useCallback((cli: 'claude' | 'codex' | 'gemini', type: 'temporary' | 'machine' | 'global') => {
+    const handleCLIBannerDismiss = React.useCallback((cli: NewSessionAgentType, type: 'temporary' | 'machine' | 'global') => {
         if (type === 'temporary') {
             // X button: Hide for current session only (not persisted)
             setHiddenBanners(prev => ({ ...prev, [cli]: true }));
@@ -587,7 +590,7 @@ function NewSessionWizard() {
         }
     }, [selectedMachineId, dismissedCLIWarnings, setDismissedCLIWarnings]);
 
-    const getAgentDisplayName = React.useCallback((value: 'claude' | 'codex' | 'gemini') => {
+    const getAgentDisplayName = React.useCallback((value: NewSessionAgentType) => {
         switch (value) {
             case 'claude':
                 return t('agentInput.agent.claude');
@@ -595,6 +598,8 @@ function NewSessionWizard() {
                 return t('agentInput.agent.codex');
             case 'gemini':
                 return t('agentInput.agent.gemini');
+            case 'opencode':
+                return 'OpenCode';
         }
     }, []);
 
@@ -604,7 +609,7 @@ function NewSessionWizard() {
         if (!validateProfileForAgent(profile, agentType)) {
             const supportedAgents = (Object.entries(profile.compatibility) as [string, boolean][])
                 .filter(([agent, supported]) => supported && agent !== agentType)
-                .map(([agent]) => agent as 'claude' | 'codex' | 'gemini');
+                .map(([agent]) => agent as NewSessionAgentType);
             const required = supportedAgents.join(',') || 'claude';
             return {
                 available: false,
@@ -618,7 +623,7 @@ function NewSessionWizard() {
         const supportedCLIs = (Object.entries(profile.compatibility) as [string, boolean][])
             .filter(([, supported]) => supported)
             .map(([agent]) => agent);
-        const requiredCLI = supportedCLIs.length === 1 ? supportedCLIs[0] as 'claude' | 'codex' | 'gemini' : null;
+        const requiredCLI = supportedCLIs.length === 1 ? supportedCLIs[0] as NewSessionAgentType : null;
 
         if (requiredCLI && cliAvailability[requiredCLI] === false) {
             return {
@@ -647,6 +652,17 @@ function NewSessionWizard() {
         // Check built-in profiles
         return getBuiltInProfile(selectedProfileId);
     }, [selectedProfileId, profileMap]);
+
+    React.useEffect(() => {
+        if (!selectedProfile || validateProfileForAgent(selectedProfile, agentType)) {
+            return;
+        }
+
+        const fallbackProfile = compatibleProfiles.find(profile => isProfileAvailable(profile).available) ?? compatibleProfiles[0];
+        if (fallbackProfile && fallbackProfile.id !== selectedProfileId) {
+            setSelectedProfileId(fallbackProfile.id);
+        }
+    }, [agentType, compatibleProfiles, isProfileAvailable, selectedProfile, selectedProfileId]);
 
     const selectedMachine = React.useMemo(() => {
         if (!selectedMachineId) return null;
@@ -726,10 +742,12 @@ function NewSessionWizard() {
     const canCreate = React.useMemo(() => {
         return (
             selectedProfileId !== null &&
+            selectedProfile !== null &&
+            isProfileAvailable(selectedProfile).available &&
             selectedMachineId !== null &&
             selectedPath.trim() !== ''
         );
-    }, [selectedProfileId, selectedMachineId, selectedPath]);
+    }, [selectedProfileId, selectedProfile, isProfileAvailable, selectedMachineId, selectedPath]);
 
     const selectProfile = React.useCallback((profileId: string) => {
         setSelectedProfileId(profileId);
@@ -743,7 +761,7 @@ function NewSessionWizard() {
                 .map(([agent]) => agent);
 
             if (supportedCLIs.length === 1) {
-                const requiredAgent = supportedCLIs[0] as 'claude' | 'codex' | 'gemini';
+                const requiredAgent = supportedCLIs[0] as NewSessionAgentType;
                 // Check if this agent is available and allowed
                 const isAvailable = cliAvailability[requiredAgent] !== false;
                 const isAllowed = requiredAgent !== 'gemini' || experimentsEnabled;
@@ -770,7 +788,7 @@ function NewSessionWizard() {
                 }
             }
         }
-    }, [profileMap, cliAvailability.claude, cliAvailability.codex, cliAvailability.gemini, experimentsEnabled, availableModes, agentType]);
+    }, [profileMap, cliAvailability.claude, cliAvailability.codex, cliAvailability.gemini, cliAvailability.opencode, experimentsEnabled, availableModes, agentType]);
 
     // Ensure permission mode is valid for current agent, falling back when needed.
     React.useEffect(() => {
@@ -842,7 +860,7 @@ function NewSessionWizard() {
             name: '',
             anthropicConfig: {},
             environmentVariables: [],
-            compatibility: { claude: true, codex: true, gemini: true },
+                compatibility: { claude: true, codex: true, gemini: true, opencode: true },
             isBuiltIn: false,
             createdAt: Date.now(),
             updatedAt: Date.now(),
@@ -882,7 +900,7 @@ function NewSessionWizard() {
 
         const supportedAgents = (Object.entries(profile.compatibility) as [string, boolean][])
             .filter(([, supported]) => supported)
-            .map(([agent]) => agent as 'claude' | 'codex' | 'gemini');
+            .map(([agent]) => agent as NewSessionAgentType);
         if (supportedAgents.length > 0) {
             parts.push(
                 t('newSession.profileSection.cliLabel', {
@@ -897,13 +915,13 @@ function NewSessionWizard() {
                     .split(':')[1]
                     ?.split(',')
                     .filter(Boolean)
-                    .map((agent) => getAgentDisplayName(agent as 'claude' | 'codex' | 'gemini'))
+                    .map((agent) => getAgentDisplayName(agent as NewSessionAgentType))
                     .join(' / ');
                 if (required) {
                     parts.push(t('newSession.profileSection.requiresAgentOnly', { agent: required }));
                 }
             } else if (availability.reason.startsWith('cli-not-detected:')) {
-                const cli = availability.reason.split(':')[1] as 'claude' | 'codex' | 'gemini';
+                const cli = availability.reason.split(':')[1] as NewSessionAgentType;
                 parts.push(t('newSession.profileSection.cliNotDetected', { agent: getAgentDisplayName(cli) }));
             }
         }
@@ -1090,11 +1108,8 @@ function NewSessionWizard() {
             });
 
             let environmentVariables = undefined;
-            if (selectedProfileId) {
-                const selectedProfile = profileMap.get(selectedProfileId);
-                if (selectedProfile) {
-                    environmentVariables = transformProfileToEnvironmentVars(selectedProfile, agentType);
-                }
+            if (selectedProfile) {
+                environmentVariables = transformProfileToEnvironmentVars(selectedProfile, agentType);
             }
 
             const sessionSpawnStartedAt = Date.now();
@@ -1175,7 +1190,7 @@ function NewSessionWizard() {
             Modal.alert(t('common.error'), errorMessage);
             setIsCreating(false);
         }
-    }, [selectedMachineId, selectedPath, sessionPrompt, sessionType, experimentsEnabled, agentType, selectedProfileId, permissionMode, modelMode, recentMachinePaths, profileMap, router]);
+    }, [selectedMachineId, selectedPath, sessionPrompt, sessionType, experimentsEnabled, agentType, selectedProfileId, selectedProfile, permissionMode, modelMode, recentMachinePaths, router]);
 
     const screenWidth = useWindowDimensions().width;
 
@@ -1195,6 +1210,7 @@ function NewSessionWizard() {
             cliStatus: includeCLI ? {
                 claude: cliAvailability.claude,
                 codex: cliAvailability.codex,
+                opencode: cliAvailability.opencode,
                 ...(experimentsEnabled && { gemini: cliAvailability.gemini }),
             } : undefined,
         };
@@ -1347,6 +1363,14 @@ function NewSessionWizard() {
                                             </Text>
                                             <Text style={{ fontSize: 11, color: cliAvailability.codex ? theme.colors.success : theme.colors.textDestructive, ...Typography.default() }}>
                                                 {getAgentDisplayName('codex')}
+                                            </Text>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                            <Text style={{ fontSize: 11, color: cliAvailability.opencode ? theme.colors.success : theme.colors.textDestructive, ...Typography.default() }}>
+                                                {cliAvailability.opencode ? '✓' : '✗'}
+                                            </Text>
+                                            <Text style={{ fontSize: 11, color: cliAvailability.opencode ? theme.colors.success : theme.colors.textDestructive, ...Typography.default() }}>
+                                                {getAgentDisplayName('opencode')}
                                             </Text>
                                         </View>
                                         {experimentsEnabled && (

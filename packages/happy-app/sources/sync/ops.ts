@@ -152,7 +152,7 @@ export interface SpawnSessionOptions {
     terminalCarrierMode?: 'direct' | 'hosted';
     approvedNewDirectoryCreation?: boolean;
     token?: string;
-    agent?: 'codex' | 'claude' | 'gemini';
+    agent?: 'codex' | 'claude' | 'gemini' | 'opencode';
     // Environment variables from AI backend profile
     // Accepts any environment variables - daemon will pass them to the agent process
     // Common variables include:
@@ -186,19 +186,23 @@ export async function machineSpawnNewSession(options: SpawnSessionOptions): Prom
             terminalCarrierMode?: 'direct' | 'hosted',
             approvedNewDirectoryCreation?: boolean,
             token?: string,
-            agent?: 'codex' | 'claude' | 'gemini',
+            agent?: 'codex' | 'claude' | 'gemini' | 'opencode',
             environmentVariables?: Record<string, string>;
         }>(
             machineId,
             'spawn-happy-session',
-            { type: 'spawn-in-directory', directory, sessionId, happySessionId, tmuxSessionId, openTerminal, terminalCarrierMode, approvedNewDirectoryCreation, token, agent, environmentVariables }
+            { type: 'spawn-in-directory', directory, sessionId, happySessionId, tmuxSessionId, openTerminal, terminalCarrierMode, approvedNewDirectoryCreation, token, agent, environmentVariables },
+            { timeoutMs: 20_000 }
         );
         return result;
     } catch (error) {
         // Handle RPC errors
+        const errorMessage = error instanceof Error ? error.message : 'Failed to spawn session';
         return {
             type: 'error',
-            errorMessage: error instanceof Error ? error.message : 'Failed to spawn session'
+            errorMessage: errorMessage.includes('did not respond')
+                ? 'HelloVibe daemon did not respond while starting the session. Check that the daemon is running and signed in, then retry.'
+                : errorMessage
         };
     }
 }

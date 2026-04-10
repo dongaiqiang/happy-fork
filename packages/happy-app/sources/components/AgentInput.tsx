@@ -24,6 +24,7 @@ import { t } from '@/text';
 import { Metadata } from '@/sync/storageTypes';
 import { AIBackendProfile, getProfileEnvironmentVariables, validateProfileForAgent } from '@/sync/settings';
 import { getBuiltInProfile } from '@/sync/profileUtils';
+import type { StreamingAsrUiState } from '@/features/voice-input';
 
 import { SmartVoiceButton } from '@/features/custom-asr/SmartVoiceButton';
 
@@ -53,6 +54,7 @@ interface AgentInputProps {
         cliStatus?: {
             claude: boolean | null;
             codex: boolean | null;
+            opencode?: boolean | null;
             gemini?: boolean | null;
         };
     };
@@ -67,7 +69,7 @@ interface AgentInputProps {
     };
     alwaysShowContextSize?: boolean;
     onFileViewerPress?: () => void;
-    agentType?: 'claude' | 'codex' | 'gemini';
+    agentType?: 'claude' | 'codex' | 'gemini' | 'opencode';
     onAgentClick?: () => void;
     machineName?: string | null;
     onMachineClick?: () => void;
@@ -281,6 +283,39 @@ const stylesheet = StyleSheet.create((theme, runtime) => ({
     sendButtonIcon: {
         color: theme.colors.button.primary.tint,
     },
+    voiceInputNoticeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+        paddingHorizontal: 8,
+        paddingBottom: 8,
+    },
+    voiceInputNoticePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        gap: 6,
+        flexShrink: 1,
+    },
+    voiceInputNoticeText: {
+        fontSize: 11,
+        flexShrink: 1,
+        ...Typography.default(),
+    },
+    voiceInputNoticeAction: {
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    voiceInputNoticeActionText: {
+        fontSize: 11,
+        ...Typography.default('semiBold'),
+    },
 }));
 
 const getContextWarning = (contextSize: number, alwaysShow: boolean = false, theme: Theme) => {
@@ -304,6 +339,10 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
     const screenWidth = useWindowDimensions().width;
 
     const hasText = props.value.trim().length > 0;
+    const [streamingAsrState, setStreamingAsrState] = React.useState<StreamingAsrUiState>({
+        mode: 'idle',
+        hasDraft: false
+    });
 
     // Check if this is a Codex or Gemini session
     // Use metadata.flavor for existing sessions, agentType prop for new sessions
@@ -358,6 +397,44 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
         : null;
 
     const agentInputEnterToSend = useSetting('agentInputEnterToSend');
+    const voiceInputNotice = React.useMemo(() => {
+        switch (streamingAsrState.mode) {
+            case 'listening_new':
+                return {
+                    text: t('agentInput.voiceInput.listeningNew'),
+                    icon: 'mic',
+                    tint: '#34C759',
+                    background: 'rgba(52, 199, 89, 0.14)',
+                    showSendAction: false
+                } as const;
+            case 'listening_append':
+                return {
+                    text: t('agentInput.voiceInput.listeningAppend'),
+                    icon: 'create-outline',
+                    tint: '#34C759',
+                    background: 'rgba(52, 199, 89, 0.14)',
+                    showSendAction: false
+                } as const;
+            case 'ready_to_continue':
+                return {
+                    text: t('agentInput.voiceInput.readyToContinue'),
+                    icon: 'pause-circle-outline',
+                    tint: '#0A84FF',
+                    background: 'rgba(10, 132, 255, 0.14)',
+                    showSendAction: hasText
+                } as const;
+            case 'ready_to_send':
+                return {
+                    text: t('agentInput.voiceInput.readyToSend'),
+                    icon: 'checkmark-circle-outline',
+                    tint: theme.colors.textSecondary,
+                    background: 'rgba(142, 142, 147, 0.14)',
+                    showSendAction: false
+                } as const;
+            default:
+                return null;
+        }
+    }, [hasText, streamingAsrState.mode, theme.colors.textSecondary]);
 
 
     // Abort button state
@@ -790,6 +867,28 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                                                     codex
                                                 </Text>
                                             </View>
+                                            {props.connectionStatus.cliStatus.opencode !== undefined && (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                    <Text style={{
+                                                        fontSize: 11,
+                                                        color: props.connectionStatus.cliStatus.opencode
+                                                            ? theme.colors.success
+                                                            : theme.colors.textDestructive,
+                                                        ...Typography.default()
+                                                    }}>
+                                                        {props.connectionStatus.cliStatus.opencode ? '✓' : '✗'}
+                                                    </Text>
+                                                    <Text style={{
+                                                        fontSize: 11,
+                                                        color: props.connectionStatus.cliStatus.opencode
+                                                            ? theme.colors.success
+                                                            : theme.colors.textDestructive,
+                                                        ...Typography.default()
+                                                    }}>
+                                                        opencode
+                                                    </Text>
+                                                </View>
+                                            )}
                                             {props.connectionStatus.cliStatus.gemini !== undefined && (
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                                     <Text style={{
@@ -960,6 +1059,34 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                         />
                     </View>
 
+                    {voiceInputNotice ? (
+                        <View style={styles.voiceInputNoticeRow}>
+                            <View style={[styles.voiceInputNoticePill, { backgroundColor: voiceInputNotice.background }]}>
+                                <Ionicons name={voiceInputNotice.icon} size={14} color={voiceInputNotice.tint} />
+                                <Text style={[styles.voiceInputNoticeText, { color: theme.colors.text }]}>
+                                    {voiceInputNotice.text}
+                                </Text>
+                            </View>
+                            {voiceInputNotice.showSendAction && !props.isReadOnly ? (
+                                <Pressable
+                                    onPress={props.onSend}
+                                    disabled={!!props.isSendDisabled || !!props.isSending}
+                                    style={(p) => ({
+                                        ...styles.voiceInputNoticeAction,
+                                        backgroundColor: props.isSendDisabled || props.isSending
+                                            ? theme.colors.button.primary.disabled
+                                            : theme.colors.button.primary.background,
+                                        opacity: p.pressed ? 0.7 : 1
+                                    })}
+                                >
+                                    <Text style={[styles.voiceInputNoticeActionText, { color: theme.colors.button.primary.tint }]}>
+                                        {t('agentInput.voiceInput.sendDraft')}
+                                    </Text>
+                                </Pressable>
+                            ) : null}
+                        </View>
+                    ) : null}
+
                     {/* Action buttons below input */}
                     <View style={styles.actionButtonsContainer}>
                         <View style={{ flexDirection: 'column', flex: 1, gap: 2 }}>
@@ -1058,7 +1185,13 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                                             fontWeight: '600',
                                             ...Typography.default('semiBold'),
                                         }}>
-                                            {props.agentType === 'claude' ? t('agentInput.agent.claude') : props.agentType === 'codex' ? t('agentInput.agent.codex') : t('agentInput.agent.gemini')}
+                                            {props.agentType === 'claude'
+                                                ? t('agentInput.agent.claude')
+                                                : props.agentType === 'codex'
+                                                    ? t('agentInput.agent.codex')
+                                                    : props.agentType === 'gemini'
+                                                        ? t('agentInput.agent.gemini')
+                                                        : 'OpenCode'}
                                         </Text>
                                     </Pressable>
                                 )}
@@ -1113,6 +1246,8 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                                         styles={styles}
                                         sessionId={props.sessionId}
                                         onTextUpdate={props.onChangeText}
+                                        currentText={props.value}
+                                        onStreamingAsrStateChange={setStreamingAsrState}
                                     />
                                 </View>
                             </View>

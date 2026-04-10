@@ -68,6 +68,12 @@ export function getGeminiPermissionModes(translate: Translate): PermissionMode[]
     ];
 }
 
+export function getOpenCodePermissionModes(translate: Translate): PermissionMode[] {
+    return [
+        { key: 'default', name: translate('agentInput.permissionMode.default'), description: null },
+    ];
+}
+
 export function getClaudeModelModes(): ModelMode[] {
     return [
         { key: 'default', name: 'Default', description: 'Use CLI settings' },
@@ -79,6 +85,7 @@ export function getClaudeModelModes(): ModelMode[] {
 
 export function getCodexModelModes(translate: Translate): ModelMode[] {
     return [
+        { key: 'default', name: translate('newSession.wizardOptions.defaultLabel'), description: translate('agentInput.model.configureInCli') },
         { key: 'gpt-5-codex-high', name: translate('agentInput.codexModel.gpt5CodexHigh'), description: null },
         { key: 'gpt-5-codex-medium', name: translate('agentInput.codexModel.gpt5CodexMedium'), description: null },
         { key: 'gpt-5-codex-low', name: translate('agentInput.codexModel.gpt5CodexLow'), description: null },
@@ -93,12 +100,21 @@ export function getGeminiModelModes(): ModelMode[] {
     return GEMINI_MODEL_FALLBACKS;
 }
 
+export function getOpenCodeModelModes(translate: Translate): ModelMode[] {
+    return [
+        { key: 'default', name: translate('newSession.wizardOptions.defaultLabel'), description: translate('agentInput.model.configureInCli') },
+    ];
+}
+
 export function getHardcodedPermissionModes(flavor: AgentFlavor, translate: Translate): PermissionMode[] {
     if (flavor === 'codex') {
         return getCodexPermissionModes(translate);
     }
     if (flavor === 'gemini') {
         return getGeminiPermissionModes(translate);
+    }
+    if (flavor === 'opencode') {
+        return getOpenCodePermissionModes(translate);
     }
     return getClaudePermissionModes(translate);
 }
@@ -110,6 +126,9 @@ export function getHardcodedModelModes(flavor: AgentFlavor, translate: Translate
     if (flavor === 'gemini') {
         return getGeminiModelModes();
     }
+    if (flavor === 'opencode') {
+        return getOpenCodeModelModes(translate);
+    }
     return getClaudeModelModes();
 }
 
@@ -118,11 +137,19 @@ export function getAvailableModels(
     metadata: Metadata | null | undefined,
     translate: Translate,
 ): ModelMode[] {
+    const hardcodedModels = getHardcodedModelModes(flavor, translate);
     const metadataModels = mapMetadataOptions(metadata?.models);
-    if (metadataModels.length > 0) {
+    if (metadataModels.length === 0) {
+        return hardcodedModels;
+    }
+
+    const defaultModelKey = getDefaultModelKey(flavor);
+    const defaultModelOption = hardcodedModels.find((option) => option.key === defaultModelKey);
+    if (!defaultModelOption || metadataModels.some((option) => option.key === defaultModelKey)) {
         return metadataModels;
     }
-    return getHardcodedModelModes(flavor, translate);
+
+    return [defaultModelOption, ...metadataModels];
 }
 
 export function getAvailablePermissionModes(
@@ -162,9 +189,16 @@ export function resolveCurrentOption<T extends ModeOption>(
     return null;
 }
 
+export function normalizeStoredModelKey(flavor: AgentFlavor, key: string | null | undefined): string | null | undefined {
+    if (flavor === 'codex' && key === 'gpt-5-codex-high') {
+        return 'default';
+    }
+    return key;
+}
+
 export function getDefaultModelKey(flavor: AgentFlavor): string {
     if (flavor === 'codex') {
-        return 'gpt-5-codex-high';
+        return 'default';
     }
     if (flavor === 'gemini') {
         return 'gemini-2.5-pro';

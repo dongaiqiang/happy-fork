@@ -124,7 +124,7 @@ export interface SpawnSessionOptions {
     openTerminal?: boolean;
     terminalCarrierMode?: 'direct' | 'hosted';
     approvedNewDirectoryCreation?: boolean;
-    agent?: 'claude' | 'codex' | 'gemini';
+    agent?: 'claude' | 'codex' | 'gemini' | 'opencode';
     token?: string;
     environmentVariables?: {
         // Anthropic Claude API configuration

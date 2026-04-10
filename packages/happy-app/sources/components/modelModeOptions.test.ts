@@ -4,7 +4,9 @@ import {
     getAvailablePermissionModes,
     getCodexModelModes,
     getClaudePermissionModes,
+    getDefaultModelKey,
     mapMetadataOptions,
+    normalizeStoredModelKey,
     resolveCurrentOption,
 } from './modelModeOptions';
 
@@ -30,6 +32,7 @@ describe('modelModeOptions', () => {
     it('builds codex model fallbacks with translated labels', () => {
         const models = getCodexModelModes(translate);
         expect(models.map((model) => model.key)).toEqual([
+            'default',
             'gpt-5-codex-high',
             'gpt-5-codex-medium',
             'gpt-5-codex-low',
@@ -38,10 +41,14 @@ describe('modelModeOptions', () => {
             'gpt-5-medium',
             'gpt-5-high',
         ]);
-        expect(models[0].name).toBe('tr:agentInput.codexModel.gpt5CodexHigh');
+        expect(models[0]).toEqual({
+            key: 'default',
+            name: 'tr:newSession.wizardOptions.defaultLabel',
+            description: 'tr:agentInput.model.configureInCli',
+        });
     });
 
-    it('prefers metadata models over hardcoded fallbacks', () => {
+    it('keeps the default model option ahead of metadata-provided models', () => {
         const models = getAvailableModels('gemini', {
             models: [
                 { code: 'custom-gemini', value: 'Gemini Custom', description: 'From metadata' },
@@ -49,7 +56,25 @@ describe('modelModeOptions', () => {
         } as any, translate);
 
         expect(models).toEqual([
+            { key: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Most capable' },
             { key: 'custom-gemini', name: 'Gemini Custom', description: 'From metadata' },
+        ]);
+    });
+
+    it('keeps the codex default option when metadata exposes the effective model', () => {
+        const models = getAvailableModels('codex', {
+            models: [
+                { code: 'gpt-5.3-codex', value: 'gpt-5.3-codex', description: 'Effective CLI model' },
+            ],
+        } as any, translate);
+
+        expect(models).toEqual([
+            {
+                key: 'default',
+                name: 'tr:newSession.wizardOptions.defaultLabel',
+                description: 'tr:agentInput.model.configureInCli',
+            },
+            { key: 'gpt-5.3-codex', name: 'gpt-5.3-codex', description: 'Effective CLI model' },
         ]);
     });
 
@@ -59,6 +84,23 @@ describe('modelModeOptions', () => {
         } as any, translate);
 
         expect(modes.map((mode) => mode.key)).toEqual(['default', 'read-only', 'safe-yolo', 'yolo']);
+    });
+
+    it('keeps OpenCode on CLI-configured default modes before catalog work starts', () => {
+        expect(getAvailableModels('opencode', null, translate)).toEqual([
+            {
+                key: 'default',
+                name: 'tr:newSession.wizardOptions.defaultLabel',
+                description: 'tr:agentInput.model.configureInCli',
+            },
+        ]);
+        expect(getAvailablePermissionModes('opencode', null, translate)).toEqual([
+            {
+                key: 'default',
+                name: 'tr:agentInput.permissionMode.default',
+                description: null,
+            },
+        ]);
     });
 
     it('applies hacks to metadata-provided operating modes', () => {
@@ -83,5 +125,14 @@ describe('modelModeOptions', () => {
 
         expect(resolveCurrentOption(options, ['missing', 'b', 'a'])).toEqual({ key: 'b', name: 'B' });
         expect(resolveCurrentOption(options, ['missing'])).toBeNull();
+    });
+
+    it('defaults codex sessions to CLI-configured model routing', () => {
+        expect(getDefaultModelKey('codex')).toBe('default');
+    });
+
+    it('normalizes the legacy codex default model to the new default option', () => {
+        expect(normalizeStoredModelKey('codex', 'gpt-5-codex-high')).toBe('default');
+        expect(normalizeStoredModelKey('codex', 'gpt-5.3-codex-high')).toBe('gpt-5.3-codex-high');
     });
 });
