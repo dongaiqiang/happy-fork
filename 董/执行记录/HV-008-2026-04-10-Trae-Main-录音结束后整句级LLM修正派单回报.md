@@ -1,0 +1,25 @@
+# HV-008-2026-04-10-Trae-Main-录音结束后整句级LLM修正派单回报
+
+- 回复 Agent：`Trae-主线执行位`
+- 回复任务：`HV-008-TRAE-MAIN-02 录音结束后整句级LLM修正`
+- 工单号：`HV-008` / `HV-008-TRAE-MAIN-02`
+- 详情如下：
+- 任务名称：`HV-008-TRAE-MAIN-02 录音结束后整句级LLM修正`
+- 工作目录：`/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main`
+- 结果概述：已完成录音结束后整句级 LLM 修正链路收口，并将后端复用口径扩展到 Claude / OpenCode / Codex / Gemini 的现有凭据入口；当前剩余缺口不是“单独再接一套模型”，而是让本地或测试环境中的 server 进程实际拿到这些入口正在使用的共享凭据或已连接 token，从而补齐真实录音命中证据。
+- 修改文件：
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/voiceRoutes.ts`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/voiceRoutes.test.ts`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/sync/apiVoice.ts`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/features/voice-input/providers/useStreamingAsrProvider.ts`
+- 交付文件：
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/执行记录/HV-008-2026-04-10-Trae-Main-录音结束后整句级LLM修正工作日志.md`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/测试结果/HV-008-2026-04-10-Trae-Main-录音结束后整句级LLM修正验证结果.md`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/评审/HV-008-2026-04-10-Trae-Main-录音结束后整句级LLM修正结论.md`
+  - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/董/执行记录/HV-008-2026-04-10-Trae-Main-录音结束后整句级LLM修正派单回报.md`
+- 模型调用链路：后端统一复用 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/voiceRoutes.ts`；Claude 兼容链路走 Anthropic Messages API，配置来源优先级为 `VOICE_POSTPROCESS_ANTHROPIC_*` → `ANTHROPIC_*` → `serviceAccountToken`；OpenCode / Codex 兼容链路走 OpenAI Chat Completions API，配置来源优先级为 `VOICE_POSTPROCESS_OPENAI_*` → `OPENAI_*` → `serviceAccountToken`；Gemini 兼容链路走 Google Gemini generateContent API，配置来源优先级为 `VOICE_POSTPROCESS_GEMINI_*` → `GEMINI_*` / `GOOGLE_API_KEY` → `serviceAccountToken`；回退策略为所有 target 失败或无 target 时直接返回原文。
+- 日志与部署结果：已补齐前端请求 url/source、前端应用 skip reason、服务端 target/source/success/failed/fallback 日志；本地重启服务后 `curl http://127.0.0.1:3005/v1/voice/postprocess` 已返回 `401` 而非 `404`，说明路由已部署；当前运行进程环境键核对结果为 `NO_MODEL_ENV_KEYS`，说明这轮 server 进程还没有看到可复用的 Claude / OpenCode / Codex / Gemini 凭据入口。
+- 验证结果：已重新复跑 `yarn workspace happy-app test --run sources/features/voice-input/providers/useStreamingAsrProvider.test.ts`、`yarn workspace happy-server test --run sources/app/api/routes/voiceRoutes.test.ts`、`yarn workspace happy-app typecheck`、`yarn workspace happy-server build`，结果全部通过；其中服务端路由测试当前为 `6` 条通过，已覆盖共享 `ANTHROPIC_*` success log、术语提示词注入、Claude `serviceAccountToken` 复用、Codex(OpenAI) OAuth token 复用、Gemini 共享配置复用与 `reason=no-target` fallback log；已确认不回退 `HV-008-TRAE-MAIN-01` 的实时去重主链路，但尚未完成带真实模型命中的最终录音黑盒验收。
+- 已提交版本：`无`
+- 风险与阻塞：当前阻塞不是缺一套新的模型接入，而是当前运行中的 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server` 进程还没有实际拿到现有 Claude / OpenCode / Codex / Gemini 所在的共享 `ANTHROPIC_*`、`OPENAI_*`、`GEMINI_*`、`GOOGLE_API_KEY` 或用户已连接的 `serviceAccountToken`；该项一旦在本地或测试环境打通，就继续补真实录音验收。
+- 是否需要其他目录同步：`不需要`，当前未改共享用户认知内容，也未形成可要求其他目录拉取的提交基线。
