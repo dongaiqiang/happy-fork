@@ -22,10 +22,11 @@
 ### 2. 模型调用链路收口
 
 - 在 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/voiceRoutes.ts` 内继续沿用现有后端路由，不新增并行接口。
-- 将后处理目标解析收口为三层来源：
+- 将后处理目标解析收口为四层来源：
   - `VOICE_POSTPROCESS_*`
   - 共享 `ANTHROPIC_*` / `OPENAI_*` / `GEMINI_*` / `GOOGLE_API_KEY`
   - `serviceAccountToken`
+  - 本机 Claude / Codex / Gemini 配置文件
 - 这一口径与 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-cli/src/daemon/run.ts`、`/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-cli/src/commands/connect.ts`、`/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-cli/src/agent/factories/gemini.ts` 中 Claude / OpenCode / Codex / Gemini 会消费的共享环境变量或 connect token 保持一致：
   - Claude 口径走 `ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_BASE_URL`、`ANTHROPIC_MODEL`
   - OpenCode / Codex 口径走 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`OPENAI_MODEL`，以及 `openai` vendor 的 connect token
@@ -50,7 +51,7 @@
 - 本地重新启动 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server` 开发服务后，日志文件写入：
   - `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/.logs/04-10-06-31-31.log`
 - 本地对 `http://127.0.0.1:3005/v1/voice/postprocess` 发送未授权请求，返回 `401 Unauthorized`，证明当前本地服务已挂上该路由，不再是此前现场出现的 `404` 老进程状态。
-- 进一步对当前运行进程做环境键核对，结果为 `NO_MODEL_ENV_KEYS`，说明本地这轮 dev server 进程还没有拿到可复用的 `OPENAI_*`、`ANTHROPIC_*`、`VOICE_POSTPROCESS_*` 或已连接 `serviceAccountToken` 上游入口，因此本地只能完成“路由存在性校验”，不能完成真实录音 live hit。
+- 进一步对当前运行进程做环境键核对，结果为 `NO_MODEL_ENV_KEYS`；该结果只能说明本地这轮 dev server 进程没有显式注入共享 env，不再等同于“后端一定拿不到本机现有凭据”，因为后续已补上 Claude / Codex / Gemini 本机配置文件直读逻辑。
 
 ## 本轮实际修改文件
 
@@ -62,9 +63,9 @@
 ## 当前结论
 
 - `录音结束 -> 规则整句化 -> LLM 后处理 -> 条件回写输入框` 的主链路在代码上已明确收口。
-- 当前正式采用的是“复用共享 Claude / OpenCode / Codex / Gemini 兼容配置”的后端路由，而不是另起一条独立模型接入。
+- 当前正式采用的是“复用共享 Claude / OpenCode / Codex / Gemini 兼容配置 + 本机现有配置文件”的后端路由，而不是另起一条独立模型接入。
 - 当前已补齐足以区分“接口调用了 / 模型命中了 / 前端应用了没”的日志字段。
-- 当前本地部署校验已确认路由存在，但本地进程还没有实际拿到现有 Claude / OpenCode 正在使用的共享凭据或已连接 token，因此尚未形成带真实命中的 live hit 证据，这一项需在测试环境或带复用凭据的本地环境继续补验。
+- 当前本地部署校验已确认路由存在；代码层也已支持直接读取本机 Claude / Codex / Gemini 现有配置文件，但尚未补出“真实录音结束 -> 命中 provider -> 返回修正文案 -> 成功回写前端”的 live hit 证据，这一项需继续补验。
 
 ## 2026-04-11 继续推进记录
 
@@ -72,6 +73,15 @@
 - 复读 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/happy-main/工单中心/HV-008-2026-04-10-Trae-Main-录音结束后整句级LLM修正正式派单.md`，确认本单当前仍以“整句级 LLM 修正链路、命中日志、部署校验、效果验收证据”作为唯一执行焦点。
 - 重新核对 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/features/voice-input/providers/useStreamingAsrProvider.ts`、`/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/sync/apiVoice.ts`、`/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/voiceRoutes.ts` 与 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/voiceRoutes.test.ts`，确认当前代码仍保持“录音结束后触发整句修正、文本变更则跳过覆盖、后端记录 provider/model/source/applied”这一收口口径。
 - 重新复跑 `yarn workspace happy-app test --run sources/features/voice-input/providers/useStreamingAsrProvider.test.ts`、`yarn workspace happy-server test --run sources/app/api/routes/voiceRoutes.test.ts`、`yarn workspace happy-app typecheck`、`yarn workspace happy-server build`，结果全部通过。
-- 本地模型环境键复核结果仍然没有变化，当前未发现新增代码缺口；继续阻塞在“当前 server 进程还没看到现有 Claude / OpenCode 共用凭据或已连接 token，导致无法形成 live hit 黑盒录音证据”这一环境侧问题。
-- 已继续把 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/voiceRoutes.ts` 扩展到 Gemini provider，并补齐 `serviceAccountToken` 解析逻辑，使 Claude / OpenCode / Codex / Gemini 均可按现有凭据入口尝试复用；对应 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/voiceRoutes.test.ts` 当前已覆盖 `6` 条测试全部通过。
-- 当前最新阻塞口径同步更新为：不是缺“新模型接入”，而是当前 server 进程还没有实际拿到现有 Claude / OpenCode / Codex / Gemini 正在使用的共享凭据或已连接 token。
+- 本地模型环境键复核结果仍然没有变化，但当前未发现新增代码缺口；`NO_MODEL_ENV_KEYS` 只说明没有显式注入共享 env，不再代表后端无法读取本机现有配置文件，当前真正未补齐的是 live hit 黑盒录音证据。
+- 已继续把 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/voiceRoutes.ts` 扩展到 Gemini provider，并补齐 `serviceAccountToken` 解析逻辑与本机配置文件直读逻辑，使 Claude / OpenCode / Codex / Gemini 均可按现有凭据入口尝试复用；对应 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server/sources/app/api/routes/voiceRoutes.test.ts` 当前已覆盖 `9` 条测试全部通过。
+- 当前最新阻塞口径同步更新为：不是缺“新模型接入”，也不再是“server 必须先看到注入 env”；而是还没有补出真实录音命中现有 provider 并成功回写前端的黑盒证据。
+
+## 2026-04-12 最终收口记录
+
+- 根据当前产品上线优先级，将 `HV-008-TRAE-MAIN-02` 的最终执行口径调整为“先取消录音结束后的整句级 LLM 后处理，不再继续投入该链路”。
+- 重新核对 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/features/voice-input/providers/useStreamingAsrProvider.ts`，移除 `asr_end` 之后对 `/v1/voice/postprocess` 的等待调用，仅保留本地整句化与草稿保留链路。
+- 保持 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/features/voice-input/providers/streamingAsrDraft.ts`、`/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/components/AgentInput.tsx`、`/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/features/custom-asr/SmartVoiceButton.tsx` 的继续补录/发送交互语义一致，不扩大 UI 改动面。
+- 新增 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/features/voice-input/providers/useStreamingAsrProvider.test.ts` 覆盖当前发送态判定，当前测试统计为 `25` 条全部通过。
+- 重新复跑 `yarn workspace happy-app test --run sources/features/voice-input/providers/useStreamingAsrProvider.test.ts` 与 `yarn workspace happy-app typecheck`，结果全部通过。
+- 当前执行会话内已收到真机黑盒确认：`hv-008我真机测试通过了`，据此将本单状态收口为“实现完成、黑盒通过、可提验”。

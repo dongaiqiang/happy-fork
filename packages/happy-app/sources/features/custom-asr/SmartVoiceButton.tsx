@@ -5,7 +5,7 @@ import { Octicons } from '@expo/vector-icons';
 import { useUnistyles } from 'react-native-unistyles';
 import { hapticsLight } from '@/components/haptics';
 import { CustomASRButton } from './CustomASRButton';
-import { useVoiceInputController } from '@/features/voice-input';
+import { useVoiceInputController, type StreamingAsrUiState } from '@/features/voice-input';
 
 interface SmartVoiceButtonProps {
     hasText: boolean;
@@ -17,6 +17,8 @@ interface SmartVoiceButtonProps {
     styles: any;
     sessionId?: string;
     onTextUpdate?: (text: string) => void;
+    currentText?: string;
+    onStreamingAsrStateChange?: (state: StreamingAsrUiState) => void;
     forceMode?: 'elevenlabs_call' | 'streaming_asr';
 }
 
@@ -31,8 +33,20 @@ export const SmartVoiceButton = React.memo((props: SmartVoiceButtonProps) => {
         isMicActive: props.isMicActive,
         sessionId: props.sessionId,
         onTextUpdate: props.onTextUpdate,
+        currentText: props.currentText,
+        onStreamingAsrStateChange: props.onStreamingAsrStateChange,
         forceMode: props.forceMode
     });
+
+    React.useEffect(() => {
+        if (!buttonDecision.showStreamingAsrButton) {
+            props.onStreamingAsrStateChange?.({
+                mode: 'idle',
+                hasDraft: props.hasText,
+                canSendDraft: props.hasText
+            });
+        }
+    }, [buttonDecision.showStreamingAsrButton, props.hasText, props.onStreamingAsrStateChange]);
     
     if (buttonDecision.showStreamingAsrButton) {
         return (
@@ -40,10 +54,12 @@ export const SmartVoiceButton = React.memo((props: SmartVoiceButtonProps) => {
                 styles={props.styles} 
                 onTextUpdate={customAsrProps.onTextUpdate}
                 sessionId={customAsrProps.sessionId}
+                currentText={customAsrProps.currentText}
                 hasText={customAsrProps.hasText}
                 isSending={customAsrProps.isSending}
                 isSendDisabled={customAsrProps.isSendDisabled}
                 onSend={customAsrProps.onSend}
+                onStateChange={customAsrProps.onStateChange}
             />
         );
     }

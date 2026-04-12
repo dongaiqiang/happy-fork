@@ -4,27 +4,39 @@ import { Ionicons } from '@expo/vector-icons';
 import { useUnistyles } from 'react-native-unistyles';
 import { hapticsLight } from '@/components/haptics';
 import { useCustomASR } from './useCustomASR';
+import { shouldPreferContinueAction, type StreamingAsrUiState } from '@/features/voice-input';
 
 export const CustomASRButton = React.memo((props: {
     styles: any;
     onTextUpdate?: (text: string) => void;
     sessionId?: string;
+    currentText?: string;
     hasText?: boolean;
     isSending?: boolean;
     isSendDisabled?: boolean;
     onSend?: () => void;
+    onStateChange?: (state: StreamingAsrUiState) => void;
 }) => {
     const { theme } = useUnistyles();
-    const { isListening, startListening, stopListening } = useCustomASR({
+    const { isListening, uiState, startListening, stopListening } = useCustomASR({
         onTextUpdate: props.onTextUpdate,
-        sessionId: props.sessionId
+        sessionId: props.sessionId,
+        currentText: props.currentText,
+        onStateChange: props.onStateChange
     });
+    const preferContinueAction = shouldPreferContinueAction(uiState.mode, !!props.hasText);
 
     const handlePress = () => {
         hapticsLight();
         if (isListening) {
             console.log('[CustomASRButton] Button pressed, stopping...');
             stopListening();
+            return;
+        }
+
+        if (preferContinueAction) {
+            console.log('[CustomASRButton] Button pressed, continuing current draft...');
+            startListening();
             return;
         }
 
@@ -41,7 +53,7 @@ export const CustomASRButton = React.memo((props: {
         }
     };
 
-    const isShowingSend = !!props.hasText || !!props.isSending;
+    const isShowingSend = (!!props.hasText && !preferContinueAction) || !!props.isSending;
     const isDisabled = (!isListening && !!props.isSendDisabled) || (!isListening && !!props.isSending);
 
     return (
@@ -68,6 +80,8 @@ export const CustomASRButton = React.memo((props: {
                     <Ionicons name="stop" size={18} color="#fff" />
                 ) : props.isSending ? (
                     <ActivityIndicator size="small" color={theme.colors.button.primary.tint} />
+                ) : preferContinueAction ? (
+                    <Ionicons name="mic" size={18} color={theme.colors.button.primary.tint} />
                 ) : props.hasText ? (
                     <Ionicons name="arrow-up" size={18} color={theme.colors.button.primary.tint} />
                 ) : (

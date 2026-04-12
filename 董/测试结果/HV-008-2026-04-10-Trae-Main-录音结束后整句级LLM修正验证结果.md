@@ -6,14 +6,14 @@
 
 ## 验证范围
 
-- 录音结束后整句级 LLM 修正前后端链路是否仍成立
-- Claude / OpenCode 兼容配置来源是否可被后端识别并打入日志
-- 400/404 老服务回退定位能力是否增强
+- 录音结束后不再调用大模型做整句级二次优化
+- 语音识别结果仍能保留本地整句化与草稿保留能力
+- 录音结束后可直接进入继续补录/发送主流程
 - 不回退 `HV-008-TRAE-MAIN-01` 已完成的实时去重与草稿保留收口
 
 ## 自动化验证
 
-### 1. 前端语音草稿与去重测试
+### 1. 前端语音草稿与发送状态测试
 
 - 命令：
 
@@ -23,110 +23,45 @@ yarn workspace happy-app test --run sources/features/voice-input/providers/useSt
 
 - 结果：
   - `1` 个测试文件通过
-  - `22` 条测试全部通过
-  - 已覆盖实时片段去重、跨轮草稿合成、整句化规则、继续听写判定
+  - `25` 条测试全部通过
+  - 已覆盖实时片段去重、跨轮草稿合成、本地整句化、继续听写判定、发送按钮展示判定
 
-### 2. 服务端路由与日志测试
-
-- 命令：
-
-```bash
-yarn workspace happy-server test --run sources/app/api/routes/voiceRoutes.test.ts
-```
-
-- 结果：
-  - `1` 个测试文件通过
-  - `6` 条测试全部通过
-  - 已覆盖：
-    - 共享 `ANTHROPIC_*` 配置被识别并进入 success log
-    - 产品术语提示词已包含 Claude / Codex / OpenCode / HelloVibe 等纠错引导
-    - 无单独 voice env key 时，Claude 仍可复用已连接 `serviceAccountToken`
-    - Codex(OpenAI) OAuth token 可被后端复用为 OpenAI 兼容链路
-    - Gemini 共享 `GEMINI_API_KEY` / `GEMINI_MODEL` 可被后端复用
-    - 无可用 provider 时进入 `reason=no-target` fallback log
-
-### 3. 类型与构建校验
+### 2. 类型校验
 
 - 命令：
 
 ```bash
 yarn workspace happy-app typecheck
-yarn workspace happy-server build
 ```
 
 - 结果：
   - `happy-app` typecheck 通过
-  - `happy-server` build 通过
 
-## 部署校验
+## 真机黑盒验收证据
 
-### 1. 路由存在性校验
+### 1. 验收结论
 
-- 本地启动 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-server` 后，对 `http://127.0.0.1:3005/v1/voice/postprocess` 发送未授权请求。
-- 返回结果：
+- 2026-04-12 真机验证已通过，验证结论来自当前执行会话中的直接确认：
 
 ```text
-HTTP/1.1 401 Unauthorized
-{"error":"Missing authorization header"}
+hv-008我真机测试通过了
 ```
 
-- 结论：
-  - 当前本地开发服务已挂载 `/v1/voice/postprocess`
-  - 已从此前现场出现的 `404 Not Found` 老进程状态恢复为“新路由已部署、只差授权与模型配置”
+### 2. 黑盒确认点
 
-### 2. 本地模型配置校验
+- 录音结束后不再因整句级 LLM 后处理等待链而卡住
+- 文本可正常进入继续补录/发送流程
+- 本轮收口未把现有语音输入主流程改坏
 
-- 对当前运行中的 server 进程做环境键核对，仅检查变量名、不输出密钥内容。
-- 结果：
+## 代码层验收结论
 
-```text
-NO_MODEL_ENV_KEYS
-```
-
-- 结论：
-  - 当前本地 dev server 进程没有看到可复用的 `OPENAI_*`、`ANTHROPIC_*`、`GEMINI_*`、`GOOGLE_API_KEY`、`VOICE_POSTPROCESS_*`，也没有实际命中已连接 `serviceAccountToken`
-  - 因此本地本轮不能完成真实模型命中，只能完成路由部署校验与自动化验证；这不代表要单独新增一套模型接入
-
-## 命中日志样例
-
-### 1. success 样例
-
-```text
-[voice-postprocess] success user=user-1 provider=anthropic-compatible model=claude-3-5-haiku-latest baseUrl=https://router.example.com/anthropic source=apiKey=shared-env:ANTHROPIC_AUTH_TOKEN;baseUrl=shared-env:ANTHROPIC_BASE_URL;model=shared-env:ANTHROPIC_MODEL applied=true
-```
-
-### 2. fallback 样例
-
-```text
-[voice-postprocess] fallback user=user-1 provider=none reason=no-target openaiApiKeySource=none anthropicApiKeySource=none
-```
-
-### 3. 前端请求样例
-
-```text
-[Voice] 发起最终文本修正 url=http://127.0.0.1:3005 source=stored-custom-server-url
-[Voice] 最终文本修正接口不可用，直接回退原文 status=404 url=http://127.0.0.1:3005 source=stored-custom-server-url
-[ASR Frontend] 跳过应用最终文本修正 requestId=3, reasons=not-applied,same-text
-```
+- `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/features/voice-input/providers/useStreamingAsrProvider.ts` 已移除录音结束后对 `/v1/voice/postprocess` 的调用等待
+- `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/features/voice-input/providers/streamingAsrDraft.ts` 保留本地整句化与发送态判定
+- `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/components/AgentInput.tsx` 与 `/Users/dongaiqiang/Documents/mycode/codes/00-chanpin/hellovibe-main/packages/happy-app/sources/features/custom-asr/SmartVoiceButton.tsx` 继续沿用现有继续补录/发送交互
 
 ## 效果验收结论
 
-- 录音结束后的整句级 LLM 修正代码链路：已建立
-- Claude / OpenCode / Codex / Gemini 兼容配置识别与日志留痕：已建立
-- 本地服务 `/v1/voice/postprocess` 路由部署：已确认
-- 本地带真实模型凭据的 live hit：未完成
-- 与 `HV-008-TRAE-MAIN-01` 实时去重主链路冲突：未发现
-
-## 当前仍未命中的部分
-
-- 由于本地运行进程还没有实际拿到现有 Claude / OpenCode / Codex / Gemini 所在的共享配置或已连接 token，无法在本轮给出“真实授权用户 + 真实模型 provider + 真实前端应用”的黑盒录音证据。
-- 该部分需要在已挂上共享 `ANTHROPIC_*` / `OPENAI_*` / `GEMINI_*` / `GOOGLE_API_KEY` 或可直接命中 `serviceAccountToken` 的环境，补一轮真实录音验收。
-
-## 2026-04-11 复核
-
-- 已重新复跑以下命令，结果保持通过：
-  - `yarn workspace happy-app test --run sources/features/voice-input/providers/useStreamingAsrProvider.test.ts`
-  - `yarn workspace happy-server test --run sources/app/api/routes/voiceRoutes.test.ts`
-  - `yarn workspace happy-app typecheck`
-  - `yarn workspace happy-server build`
-- 当前代码层面的实现、测试、类型与构建口径一致，仍然只缺“让 server 实际复用现有 Claude / OpenCode / Codex / Gemini 凭据后再跑一轮”的真实黑盒录音验收。
+- 整句级 LLM 后处理：本阶段已下线
+- 录音结束后的本地文本整理：保留
+- 真机黑盒验收：已通过
+- 与实时去重主链路冲突：未发现

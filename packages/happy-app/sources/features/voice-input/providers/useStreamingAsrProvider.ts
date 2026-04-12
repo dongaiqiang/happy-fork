@@ -3,53 +3,75 @@ import { Platform } from 'react-native';
 import { apiSocket } from '@/sync/apiSocket';
 import { requestMicrophonePermission, showMicrophonePermissionDeniedAlert } from '@/utils/microphonePermissions';
 import { encodeBase64 } from '@/encryption/base64';
+import {
+    buildStreamingAsrRoundText,
+    mergeStreamingDraft,
+    polishStreamingAsrFinalText,
+    upsertStreamingAsrSegment,
+    type StreamingAsrUiMode,
+    type StreamingAsrUiState
+} from './streamingAsrDraft';
 
 export interface StreamingAsrProviderProps {
     onTextUpdate?: (text: string) => void;
     sessionId?: string;
+    currentText?: string;
+    onStateChange?: (state: StreamingAsrUiState) => void;
 }
 
-export function useStreamingAsrProvider({ onTextUpdate, sessionId }: StreamingAsrProviderProps) {
+export function useStreamingAsrProvider({ onTextUpdate, sessionId, currentText, onStateChange }: StreamingAsrProviderProps) {
     const [isListening, setIsListening] = useState(false);
+    const [uiMode, setUiMode] = useState<StreamingAsrUiMode>('idle');
+    const [canSendDraft, setCanSendDraft] = useState(false);
+    const isListeningRef = useRef(false);
     const audioContextRef = useRef<any>(null);
     const mediaStreamSourceRef = useRef<any>(null);
     const scriptProcessorRef = useRef<any>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const chunkCountRef = useRef<number>(0);
     const nativeRecorderRef = useRef<any>(null);
-    const committedTextRef = useRef<string>('');
-    const currentSentenceTextRef = useRef<string>('');
+    const baseDraftTextRef = useRef<string>('');
+    const roundSegmentsRef = useRef<Map<number, string>>(new Map());
+    const syntheticSegmentSnRef = useRef(1);
+    const currentTextRef = useRef(currentText ?? '');
     const onTextUpdateRef = useRef(onTextUpdate);
+    const onStateChangeRef = useRef(onStateChange);
 
     useEffect(() => {
         onTextUpdateRef.current = onTextUpdate;
     }, [onTextUpdate]);
 
-    const appendWithOverlap = useCallback((base: string, incoming: string) => {
-        if (!incoming) {
-            return base;
-        }
-        if (!base) {
-            return incoming;
-        }
-        if (base.endsWith(incoming)) {
-            return base;
-        }
-        if (incoming.startsWith(base)) {
-            return incoming;
-        }
+    useEffect(() => {
+        onStateChangeRef.current = onStateChange;
+    }, [onStateChange]);
 
-        const maxOverlap = Math.min(base.length, incoming.length);
-        for (let length = maxOverlap; length > 0; length--) {
-            if (base.slice(-length) === incoming.slice(0, length)) {
-                return base + incoming.slice(length);
-            }
+    useEffect(() => {
+        isListeningRef.current = isListening;
+    }, [isListening]);
+
+    useEffect(() => {
+        currentTextRef.current = currentText ?? '';
+        if (!isListening && !(currentText ?? '').trim() && uiMode !== 'idle') {
+            setUiMode('idle');
+            setCanSendDraft(false);
         }
-        return base + incoming;
-    }, []);
+    }, [currentText, isListening, uiMode]);
+
+    useEffect(() => {
+        onStateChangeRef.current?.({
+            mode: uiMode,
+            hasDraft: Boolean((currentTextRef.current ?? '').trim()),
+            canSendDraft
+        });
+    }, [canSendDraft, currentText, uiMode]);
 
     const toPcmBase64 = useCallback((pcmData: Int16Array) => {
         return encodeBase64(new Uint8Array(pcmData.buffer));
+    }, []);
+
+    const pushTextUpdate = useCallback((text: string) => {
+        currentTextRef.current = text;
+        onTextUpdateRef.current?.(text);
     }, []);
 
     const cleanupLegacyRecorder = useCallback(() => {
@@ -90,10 +112,22 @@ export function useStreamingAsrProvider({ onTextUpdate, sessionId }: StreamingAs
         }
     }, []);
 
-    const stopListening = useCallback(async (options?: { skipNativeStop?: boolean; skipBackendStop?: boolean }) => {
+    const stopListening = useCallback(async (options?: { skipNativeStop?: boolean; skipBackendStop?: boolean; nextMode?: StreamingAsrUiMode; polishFinalText?: boolean }) => {
         console.log('[ASR Frontend] stopListening() 被调用，准备清理资源');
         setIsListening(false);
+        isListeningRef.current = false;
         chunkCountRef.current = 0;
+
+        if (options?.polishFinalText && roundSegmentsRef.current.size > 0) {
+            const joinedText = mergeStreamingDraft(
+                baseDraftTextRef.current,
+                buildStreamingAsrRoundText(roundSegmentsRef.current)
+            );
+            const polishedText = polishStreamingAsrFinalText(joinedText);
+            if (polishedText && polishedText !== currentTextRef.current) {
+                pushTextUpdate(polishedText);
+            }
+        }
 
         cleanupLegacyRecorder();
         cleanupBrowserAudio();
@@ -102,10 +136,16 @@ export function useStreamingAsrProvider({ onTextUpdate, sessionId }: StreamingAs
             console.log('[ASR Frontend] 发送 asr_stop 到后端');
             apiSocket.send('asr_stop', { sessionId });
         }
-    }, [cleanupBrowserAudio, cleanupLegacyRecorder, sessionId]);
+
+        const hasDraft = Boolean(currentTextRef.current.trim());
+        const nextMode = options?.nextMode ?? (hasDraft ? 'ready_to_send' : 'idle');
+        setCanSendDraft(nextMode !== 'idle' && hasDraft);
+        setUiMode(nextMode);
+    }, [cleanupBrowserAudio, cleanupLegacyRecorder, pushTextUpdate, sessionId]);
 
     const startLegacyStreaming = useCallback(async () => {
         setIsListening(true);
+        isListeningRef.current = true;
         console.log('[ASR Frontend] 发送 asr_start 到后端');
         apiSocket.send('asr_start', { sessionId });
 
@@ -196,36 +236,43 @@ export function useStreamingAsrProvider({ onTextUpdate, sessionId }: StreamingAs
             if (data && data.text) {
                 const incomingText = String(data.text);
                 const pgs = data.pgs;
+                const rg = Array.isArray(data.rg) ? data.rg : undefined;
+                const incomingSn = typeof data.sn === 'number' && Number.isFinite(data.sn)
+                    ? data.sn
+                    : syntheticSegmentSnRef.current++;
 
-                if (pgs === 'rpl') {
-                    currentSentenceTextRef.current = incomingText;
-                } else if (pgs === 'apd') {
-                    currentSentenceTextRef.current = appendWithOverlap(currentSentenceTextRef.current, incomingText);
-                } else {
-                    currentSentenceTextRef.current = appendWithOverlap(currentSentenceTextRef.current, incomingText);
-                }
+                roundSegmentsRef.current = upsertStreamingAsrSegment(
+                    roundSegmentsRef.current,
+                    incomingSn,
+                    incomingText,
+                    pgs,
+                    rg
+                );
 
-                if (data.ls) {
-                    committedTextRef.current = appendWithOverlap(committedTextRef.current, currentSentenceTextRef.current);
-                    currentSentenceTextRef.current = '';
-                }
-
-                const joinedText = appendWithOverlap(committedTextRef.current, currentSentenceTextRef.current);
-                console.log(`[ASR Frontend] 准备调用 onTextUpdate (sn:${data.sn}, pgs:${data.pgs}), 文本: "${joinedText}", onTextUpdate 是否存在: ${!!onTextUpdateRef.current}`);
-                if (onTextUpdateRef.current) {
-                    onTextUpdateRef.current(joinedText);
-                }
+                const joinedText = mergeStreamingDraft(
+                    baseDraftTextRef.current,
+                    buildStreamingAsrRoundText(roundSegmentsRef.current)
+                );
+                console.log(`[ASR Frontend] 准备调用 onTextUpdate (sn:${data.sn}, pgs:${data.pgs}, rg:${Array.isArray(rg) ? rg.join('-') : 'n/a'}), 文本: "${joinedText}", onTextUpdate 是否存在: ${!!onTextUpdateRef.current}`);
+                pushTextUpdate(joinedText);
             }
         });
 
         const cleanupEnd = apiSocket.onMessage('asr_end', () => {
             console.log('[ASR Frontend] 收到后端发来的 asr_end，停止录音');
-            void stopListening({ skipBackendStop: true });
+            void stopListening({
+                skipBackendStop: true,
+                polishFinalText: true,
+                nextMode: currentTextRef.current.trim() ? 'ready_to_continue' : 'idle'
+            });
         });
 
         const cleanupError = apiSocket.onMessage('asr_error', (err: any) => {
             console.error('[ASR Frontend] 收到后端发来的 asr_error:', err);
-            void stopListening({ skipBackendStop: true });
+            void stopListening({
+                skipBackendStop: true,
+                nextMode: currentTextRef.current.trim() ? 'ready_to_send' : 'idle'
+            });
         });
 
         return () => {
@@ -233,7 +280,7 @@ export function useStreamingAsrProvider({ onTextUpdate, sessionId }: StreamingAs
             cleanupEnd();
             cleanupError();
         };
-    }, [appendWithOverlap, stopListening]);
+    }, [pushTextUpdate, stopListening]);
 
     const startListening = useCallback(async () => {
         console.log('[ASR Frontend] startListening() 被调用');
@@ -245,27 +292,31 @@ export function useStreamingAsrProvider({ onTextUpdate, sessionId }: StreamingAs
                 return;
             }
 
-            committedTextRef.current = '';
-            currentSentenceTextRef.current = '';
+            baseDraftTextRef.current = currentTextRef.current.trim() ? currentTextRef.current : '';
+            roundSegmentsRef.current = new Map();
+            syntheticSegmentSnRef.current = 1;
             chunkCountRef.current = 0;
-            if (onTextUpdate) {
-                console.log('[ASR Frontend] 清空输入框');
-                onTextUpdate('');
-            } else {
-                console.warn('[ASR Frontend] 警告: onTextUpdate 回调函数未传入！');
-            }
+            setCanSendDraft(false);
+            setUiMode(baseDraftTextRef.current ? 'listening_append' : 'listening_new');
 
             await startLegacyStreaming();
-
         } catch (error) {
             console.error('[ASR Frontend] Failed to start recording:', error);
             setIsListening(false);
-            void stopListening();
+            isListeningRef.current = false;
+            setCanSendDraft(Boolean(currentTextRef.current.trim()));
+            setUiMode(currentTextRef.current.trim() ? 'ready_to_send' : 'idle');
+            void stopListening({ nextMode: currentTextRef.current.trim() ? 'ready_to_send' : 'idle' });
         }
-    }, [onTextUpdate, startLegacyStreaming, stopListening]);
+    }, [startLegacyStreaming, stopListening]);
 
     return {
         isListening,
+        uiState: {
+            mode: uiMode,
+            hasDraft: Boolean(currentTextRef.current.trim()),
+            canSendDraft
+        },
         startListening,
         stopListening
     };

@@ -24,7 +24,8 @@ import { t } from '@/text';
 import { Metadata } from '@/sync/storageTypes';
 import { AIBackendProfile, getProfileEnvironmentVariables, validateProfileForAgent } from '@/sync/settings';
 import { getBuiltInProfile } from '@/sync/profileUtils';
-import type { StreamingAsrUiState } from '@/features/voice-input';
+import { getAgentDisplayName, normalizeAgentFlavor, type NewSessionAgentType } from '@/agents/catalog';
+import { shouldShowStreamingSendAction, type StreamingAsrUiState } from '@/features/voice-input';
 
 import { SmartVoiceButton } from '@/features/custom-asr/SmartVoiceButton';
 
@@ -69,7 +70,7 @@ interface AgentInputProps {
     };
     alwaysShowContextSize?: boolean;
     onFileViewerPress?: () => void;
-    agentType?: 'claude' | 'codex' | 'gemini' | 'opencode';
+    agentType?: NewSessionAgentType;
     onAgentClick?: () => void;
     machineName?: string | null;
     onMachineClick?: () => void;
@@ -341,13 +342,15 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
     const hasText = props.value.trim().length > 0;
     const [streamingAsrState, setStreamingAsrState] = React.useState<StreamingAsrUiState>({
         mode: 'idle',
-        hasDraft: false
+        hasDraft: false,
+        canSendDraft: false
     });
 
     // Check if this is a Codex or Gemini session
     // Use metadata.flavor for existing sessions, agentType prop for new sessions
-    const isCodex = props.metadata?.flavor === 'codex' || props.agentType === 'codex';
-    const isGemini = props.metadata?.flavor === 'gemini' || props.agentType === 'gemini';
+    const normalizedFlavor = normalizeAgentFlavor(props.metadata?.flavor) ?? props.agentType ?? null;
+    const isCodex = normalizedFlavor === 'codex';
+    const isGemini = normalizedFlavor === 'gemini';
     const displayPermissionMode = React.useMemo(() => (
         props.permissionMode ? hackMode(props.permissionMode) : null
     ), [props.permissionMode]);
@@ -421,7 +424,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                     icon: 'pause-circle-outline',
                     tint: '#0A84FF',
                     background: 'rgba(10, 132, 255, 0.14)',
-                    showSendAction: hasText
+                    showSendAction: shouldShowStreamingSendAction(streamingAsrState.mode, hasText, streamingAsrState.canSendDraft)
                 } as const;
             case 'ready_to_send':
                 return {
@@ -429,12 +432,12 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                     icon: 'checkmark-circle-outline',
                     tint: theme.colors.textSecondary,
                     background: 'rgba(142, 142, 147, 0.14)',
-                    showSendAction: false
+                    showSendAction: shouldShowStreamingSendAction(streamingAsrState.mode, hasText, streamingAsrState.canSendDraft)
                 } as const;
             default:
                 return null;
         }
-    }, [hasText, streamingAsrState.mode, theme.colors.textSecondary]);
+    }, [hasText, streamingAsrState.canSendDraft, streamingAsrState.mode, theme.colors.textSecondary]);
 
 
     // Abort button state
@@ -1185,13 +1188,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                                             fontWeight: '600',
                                             ...Typography.default('semiBold'),
                                         }}>
-                                            {props.agentType === 'claude'
-                                                ? t('agentInput.agent.claude')
-                                                : props.agentType === 'codex'
-                                                    ? t('agentInput.agent.codex')
-                                                    : props.agentType === 'gemini'
-                                                        ? t('agentInput.agent.gemini')
-                                                        : 'OpenCode'}
+                                            {props.agentType ? getAgentDisplayName(props.agentType, t) : getAgentDisplayName('claude', t)}
                                         </Text>
                                     </Pressable>
                                 )}

@@ -1,5 +1,5 @@
 import { useLocalSetting } from '@/sync/storage';
-import { getVoiceModeStrategy, resolveVoiceInputMode, useLegacyVoiceProvider } from './providers';
+import { getVoiceModeStrategy, resolveVoiceInputMode, useLegacyVoiceProvider, type StreamingAsrUiState } from './providers';
 
 interface UseVoiceInputControllerProps {
     hasText: boolean;
@@ -10,6 +10,8 @@ interface UseVoiceInputControllerProps {
     isMicActive?: boolean;
     sessionId?: string;
     onTextUpdate?: (text: string) => void;
+    currentText?: string;
+    onStreamingAsrStateChange?: (state: StreamingAsrUiState) => void;
     forceMode?: 'elevenlabs_call' | 'streaming_asr';
 }
 
@@ -42,10 +44,12 @@ export function useVoiceInputController(props: UseVoiceInputControllerProps) {
         customAsrProps: {
             sessionId: props.sessionId,
             onTextUpdate: props.onTextUpdate,
+            currentText: props.currentText,
             hasText: props.hasText,
             isSending: props.isSending,
             isSendDisabled: props.isSendDisabled,
-            onSend: props.onSend
+            onSend: props.onSend,
+            onStateChange: props.onStreamingAsrStateChange
         }
     };
 }
