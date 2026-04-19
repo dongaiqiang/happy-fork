@@ -20,7 +20,7 @@ describe('config', () => {
     describe('defaults', () => {
         it('uses default server URL', () => {
             const config = loadConfig();
-            expect(config.serverUrl).toBe('https://api.easycode-ai.xyz');
+            expect(config.serverUrl).toBe('https://api.hellovibe-ai.com');
         });
 
         it('uses default home directory', () => {

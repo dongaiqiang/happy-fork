@@ -973,9 +973,9 @@ export const ca: TranslationStructure = {
         createAccount: 'Comença',
         linkOrRestoreAccount: 'Fes servir un compte existent',
         loginWithMobileApp: 'Inicia la sessió',
-        createAccountFailedInvalidResponse: 'No s\'ha pogut completar la configuració perquè el servidor no ha retornat unes dades d\'inici de sessió vàlides. Confirma que l\'adreça del servidor a la part superior dreta és https://api.easycode-ai.xyz i torna-ho a provar.',
+        createAccountFailedInvalidResponse: 'No s\'ha pogut completar la configuració perquè el servidor no ha retornat unes dades d\'inici de sessió vàlides. Confirma que l\'adreça del servidor a la part superior dreta és https://api.hellovibe-ai.com i torna-ho a provar.',
         createAccountFailedWithReason: ({ reason }: { reason: string }) =>
-            `No s\'ha pogut completar la configuració: ${reason}. Confirma que l\'adreça del servidor a la part superior dreta és https://api.easycode-ai.xyz i torna-ho a provar.`,
+            `No s\'ha pogut completar la configuració: ${reason}. Confirma que l\'adreça del servidor a la part superior dreta és https://api.hellovibe-ai.com i torna-ho a provar.`,
     },
 
     review: {

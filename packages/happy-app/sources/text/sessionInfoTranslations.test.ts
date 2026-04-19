@@ -619,8 +619,8 @@ const requiredWelcomeUsages = [
 ] as const;
 
 const forbiddenWelcomeLiterals = [
-    '创建账户失败：服务器没有返回有效登录信息。请先确认右上角服务器地址已改成 https://api.easycode-ai.xyz，然后再重试。',
-    '创建账户失败：${message || \'未知错误\'}。请先确认右上角服务器地址已改成 https://api.easycode-ai.xyz，然后再重试。',
+    '创建账户失败：服务器没有返回有效登录信息。请先确认右上角服务器地址已改成 https://api.hellovibe-ai.com，然后再重试。',
+    '创建账户失败：${message || \'未知错误\'}。请先确认右上角服务器地址已改成 https://api.hellovibe-ai.com，然后再重试。',
 ] as const;
 
 const requiredSettingsUsages = [

@@ -983,9 +983,9 @@ export const pl: TranslationStructure = {
         createAccount: 'Zacznij',
         linkOrRestoreAccount: 'Użyj istniejącego konta',
         loginWithMobileApp: 'Zaloguj się',
-        createAccountFailedInvalidResponse: 'Nie udało się dokończyć konfiguracji, ponieważ serwer nie zwrócił prawidłowych danych logowania. Potwierdź, że adres serwera w prawym górnym rogu to https://api.easycode-ai.xyz i spróbuj ponownie.',
+        createAccountFailedInvalidResponse: 'Nie udało się dokończyć konfiguracji, ponieważ serwer nie zwrócił prawidłowych danych logowania. Potwierdź, że adres serwera w prawym górnym rogu to https://api.hellovibe-ai.com i spróbuj ponownie.',
         createAccountFailedWithReason: ({ reason }: { reason: string }) =>
-            `Nie udało się dokończyć konfiguracji: ${reason}. Potwierdź, że adres serwera w prawym górnym rogu to https://api.easycode-ai.xyz i spróbuj ponownie.`,
+            `Nie udało się dokończyć konfiguracji: ${reason}. Potwierdź, że adres serwera w prawym górnym rogu to https://api.hellovibe-ai.com i spróbuj ponownie.`,
     },
 
     review: {

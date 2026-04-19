@@ -974,9 +974,9 @@ export const zhHant: TranslationStructure = {
         createAccount: '開始使用',
         linkOrRestoreAccount: '使用既有帳戶',
         loginWithMobileApp: '登入',
-        createAccountFailedInvalidResponse: '開始使用失敗：伺服器沒有回傳有效的登入資訊。請先確認右上角的伺服器位址已改成 https://api.easycode-ai.xyz，然後再試一次。',
+        createAccountFailedInvalidResponse: '開始使用失敗：伺服器沒有回傳有效的登入資訊。請先確認右上角的伺服器位址已改成 https://api.hellovibe-ai.com，然後再試一次。',
         createAccountFailedWithReason: ({ reason }: { reason: string }) =>
-            `開始使用失敗：${reason}。請先確認右上角的伺服器位址已改成 https://api.easycode-ai.xyz，然後再試一次。`,
+            `開始使用失敗：${reason}。請先確認右上角的伺服器位址已改成 https://api.hellovibe-ai.com，然後再試一次。`,
     },
 
     review: {

@@ -11,7 +11,7 @@ const bundleId = {
 }[variant];
 const slug = "happy";
 const scheme = "hellovibe";
-const universalLinkHost = "app.hellovibe.com";
+const universalLinkHost = "app.hellovibe-ai.com";
 const updatesUrl = process.env.EXPO_UPDATES_URL || "https://u.expo.dev/4558dd3d-cd5a-47cd-bad9-e591a241cc06";
 const easProjectId = process.env.EXPO_EAS_PROJECT_ID || "dabee7ae-e79f-44ec-a548-d42d2faf82d0";
 const updatesChannel = {

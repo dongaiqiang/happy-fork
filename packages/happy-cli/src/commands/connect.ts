@@ -71,7 +71,7 @@ ${chalk.bold('Examples:')}
 ${chalk.bold('Notes:')} 
   • You must be authenticated with HelloVibe first (run 'hellovibe auth login')
   • API keys are encrypted and stored securely in HelloVibe cloud
-  • You can manage your stored keys at app.hellovibe.com
+  • You can manage your stored keys at https://app.hellovibe-ai.com
 `);
 }
 

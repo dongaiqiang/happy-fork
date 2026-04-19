@@ -64,7 +64,7 @@ describe('serverConfig', () => {
             envHelloVibeServerUrl: null,
             envHappyServerUrl: 'http://env-happy.example.com',
             envServerUrl: 'http://env-generic.example.com',
-            defaultServerUrl: 'https://api.easycode-ai.xyz'
+            defaultServerUrl: 'https://api.hellovibe-ai.com'
         });
     });
 
@@ -82,7 +82,7 @@ describe('serverConfig', () => {
             envHelloVibeServerUrl: 'http://env-hellovibe.example.com',
             envHappyServerUrl: 'http://env-happy.example.com',
             envServerUrl: 'http://env-generic.example.com',
-            defaultServerUrl: 'https://api.easycode-ai.xyz'
+            defaultServerUrl: 'https://api.hellovibe-ai.com'
         });
     });
 
@@ -99,7 +99,7 @@ describe('serverConfig', () => {
             envHelloVibeServerUrl: null,
             envHappyServerUrl: 'http://env-happy.example.com',
             envServerUrl: 'http://env-generic.example.com',
-            defaultServerUrl: 'https://api.easycode-ai.xyz'
+            defaultServerUrl: 'https://api.hellovibe-ai.com'
         });
     });
 
@@ -115,21 +115,21 @@ describe('serverConfig', () => {
             envHelloVibeServerUrl: null,
             envHappyServerUrl: null,
             envServerUrl: 'http://env-generic.example.com',
-            defaultServerUrl: 'https://api.easycode-ai.xyz'
+            defaultServerUrl: 'https://api.hellovibe-ai.com'
         });
     });
 
-    it('uses the easycode default when no stored or runtime value exists', async () => {
+    it('uses the hellovibe-ai default when no stored or runtime value exists', async () => {
         const { getResolvedServerUrlInfo } = await import('./serverConfig');
 
         expect(getResolvedServerUrlInfo()).toEqual({
-            url: 'https://api.easycode-ai.xyz',
+            url: 'https://api.hellovibe-ai.com',
             source: 'default-server-url',
             storedCustomServerUrl: null,
             envHelloVibeServerUrl: null,
             envHappyServerUrl: null,
             envServerUrl: null,
-            defaultServerUrl: 'https://api.easycode-ai.xyz'
+            defaultServerUrl: 'https://api.hellovibe-ai.com'
         });
     });
 });

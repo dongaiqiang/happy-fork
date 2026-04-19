@@ -972,9 +972,9 @@ export const en = {
         createAccount: 'Get Started',
         linkOrRestoreAccount: 'Use Existing Account',
         loginWithMobileApp: 'Sign In',
-        createAccountFailedInvalidResponse: 'Failed to finish setup because the server did not return valid sign-in details. Confirm the server address in the top-right is set to https://api.easycode-ai.xyz and try again.',
+        createAccountFailedInvalidResponse: 'Failed to finish setup because the server did not return valid sign-in details. Confirm the server address in the top-right is set to https://api.hellovibe-ai.com and try again.',
         createAccountFailedWithReason: ({ reason }: { reason: string }) =>
-            `Failed to finish setup: ${reason}. Confirm the server address in the top-right is set to https://api.easycode-ai.xyz and try again.`,
+            `Failed to finish setup: ${reason}. Confirm the server address in the top-right is set to https://api.hellovibe-ai.com and try again.`,
     },
 
     review: {

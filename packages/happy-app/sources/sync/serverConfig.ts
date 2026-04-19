@@ -4,7 +4,7 @@ import { MMKV } from 'react-native-mmkv';
 const serverConfigStorage = new MMKV({ id: 'server-config' });
 
 const SERVER_KEY = 'custom-server-url';
-const DEFAULT_SERVER_URL = 'https://api.easycode-ai.xyz';
+const DEFAULT_SERVER_URL = 'https://api.hellovibe-ai.com';
 
 export type ServerUrlSource =
     | 'stored-custom-server-url'

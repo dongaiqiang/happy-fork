@@ -1050,9 +1050,9 @@ export const ja: TranslationStructure = {
         createAccount: 'はじめる',
         linkOrRestoreAccount: '既存のアカウントを使う',
         loginWithMobileApp: 'ログイン',
-        createAccountFailedInvalidResponse: 'サーバーから有効なサインイン情報が返らなかったため、セットアップを完了できませんでした。右上のサーバーアドレスが https://api.easycode-ai.xyz になっていることを確認して、もう一度お試しください。',
+        createAccountFailedInvalidResponse: 'サーバーから有効なサインイン情報が返らなかったため、セットアップを完了できませんでした。右上のサーバーアドレスが https://api.hellovibe-ai.com になっていることを確認して、もう一度お試しください。',
         createAccountFailedWithReason: ({ reason }: { reason: string }) =>
-            `セットアップを完了できませんでした: ${reason}。右上のサーバーアドレスが https://api.easycode-ai.xyz になっていることを確認して、もう一度お試しください。`,
+            `セットアップを完了できませんでした: ${reason}。右上のサーバーアドレスが https://api.hellovibe-ai.com になっていることを確認して、もう一度お試しください。`,
     },
 
     review: {

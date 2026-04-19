@@ -971,9 +971,9 @@ export const ru: TranslationStructure = {
         createAccount: 'Начать',
         linkOrRestoreAccount: 'Использовать существующий аккаунт',
         loginWithMobileApp: 'Войти',
-        createAccountFailedInvalidResponse: 'Не удалось завершить настройку, потому что сервер не вернул корректные данные для входа. Убедитесь, что адрес сервера справа сверху установлен на https://api.easycode-ai.xyz, и попробуйте снова.',
+        createAccountFailedInvalidResponse: 'Не удалось завершить настройку, потому что сервер не вернул корректные данные для входа. Убедитесь, что адрес сервера справа сверху установлен на https://api.hellovibe-ai.com, и попробуйте снова.',
         createAccountFailedWithReason: ({ reason }: { reason: string }) =>
-            `Не удалось завершить настройку: ${reason}. Убедитесь, что адрес сервера справа сверху установлен на https://api.easycode-ai.xyz, и попробуйте снова.`,
+            `Не удалось завершить настройку: ${reason}. Убедитесь, что адрес сервера справа сверху установлен на https://api.hellovibe-ai.com, и попробуйте снова.`,
     },
 
     review: {

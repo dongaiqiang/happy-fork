@@ -17,10 +17,10 @@ const CO_AUTHORED_CREDITS = (() => trimIdent(`
     <main commit message>
 
     Generated with [Claude Code](https://claude.ai/code)
-    via [Happy](https://happy.engineering)
+    via [HelloVibe](https://hellovibe-ai.com)
 
     Co-Authored-By: Claude <noreply@anthropic.com>
-    Co-Authored-By: Happy <yesreply@happy.engineering>
+    Co-Authored-By: HelloVibe <yesreply@hellovibe-ai.com>
 `))();
 
 /**

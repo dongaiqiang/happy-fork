@@ -1047,9 +1047,9 @@ export const it: TranslationStructure = {
         createAccount: 'Inizia',
         linkOrRestoreAccount: 'Usa un account esistente',
         loginWithMobileApp: 'Accedi',
-        createAccountFailedInvalidResponse: 'Impossibile completare la configurazione perché il server non ha restituito dati di accesso validi. Conferma che l\'indirizzo del server in alto a destra sia https://api.easycode-ai.xyz e riprova.',
+        createAccountFailedInvalidResponse: 'Impossibile completare la configurazione perché il server non ha restituito dati di accesso validi. Conferma che l\'indirizzo del server in alto a destra sia https://api.hellovibe-ai.com e riprova.',
         createAccountFailedWithReason: ({ reason }: { reason: string }) =>
-            `Impossibile completare la configurazione: ${reason}. Conferma che l\'indirizzo del server in alto a destra sia https://api.easycode-ai.xyz e riprova.`,
+            `Impossibile completare la configurazione: ${reason}. Conferma che l\'indirizzo del server in alto a destra sia https://api.hellovibe-ai.com e riprova.`,
     },
 
     review: {

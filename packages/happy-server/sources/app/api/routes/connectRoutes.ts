@@ -10,7 +10,7 @@ import { Context } from "@/context";
 import { db } from "@/storage/db";
 
 export function connectRoutes(app: Fastify) {
-    const githubConnectRedirectBaseUrl = (process.env.HELLOVIBE_WEBAPP_URL || process.env.HAPPY_WEBAPP_URL || 'https://app.hellovibe.com').replace(/\/$/, '');
+    const githubConnectRedirectBaseUrl = (process.env.HELLOVIBE_WEBAPP_URL || process.env.HAPPY_WEBAPP_URL || 'https://app.hellovibe-ai.com').replace(/\/$/, '');
 
     // Add content type parser for webhook endpoints to preserve raw body
     app.addContentTypeParser(

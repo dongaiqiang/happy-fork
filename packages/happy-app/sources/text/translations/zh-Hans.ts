@@ -975,9 +975,9 @@ export const zhHans: TranslationStructure = {
         createAccount: '开始使用',
         linkOrRestoreAccount: '使用已有账号',
         loginWithMobileApp: '登录',
-        createAccountFailedInvalidResponse: '开始使用失败：服务器没有返回有效登录信息。请先确认右上角服务器地址已改成 https://api.easycode-ai.xyz，然后再重试。',
+        createAccountFailedInvalidResponse: '开始使用失败：服务器没有返回有效登录信息。请先确认右上角服务器地址已改成 https://api.hellovibe-ai.com，然后再重试。',
         createAccountFailedWithReason: ({ reason }: { reason: string }) =>
-            `开始使用失败：${reason}。请先确认右上角服务器地址已改成 https://api.easycode-ai.xyz，然后再重试。`,
+            `开始使用失败：${reason}。请先确认右上角服务器地址已改成 https://api.hellovibe-ai.com，然后再重试。`,
     },
 
     review: {

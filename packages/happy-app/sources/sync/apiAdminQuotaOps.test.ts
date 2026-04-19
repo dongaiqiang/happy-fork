@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const fetchMock = vi.fn();
 
 vi.mock('./serverConfig', () => ({
-    getServerUrl: () => 'https://api.easycode-ai.xyz',
+    getServerUrl: () => 'https://api.hellovibe-ai.com',
 }));
 
 describe('apiAdminQuotaOps', () => {
@@ -65,7 +65,7 @@ describe('apiAdminQuotaOps', () => {
             },
         });
 
-        expect(fetchMock).toHaveBeenCalledWith('https://api.easycode-ai.xyz/admin/account-quota?username=alice', {
+        expect(fetchMock).toHaveBeenCalledWith('https://api.hellovibe-ai.com/admin/account-quota?username=alice', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -127,7 +127,7 @@ describe('apiAdminQuotaOps', () => {
             },
         });
 
-        expect(fetchMock).toHaveBeenCalledWith('https://api.easycode-ai.xyz/admin/quota/reset-usage', {
+        expect(fetchMock).toHaveBeenCalledWith('https://api.hellovibe-ai.com/admin/quota/reset-usage', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
