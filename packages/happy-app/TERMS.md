@@ -71,7 +71,7 @@ These terms shall be governed by and construed in accordance with applicable law
 
 ## Contact
 
-For questions about these Terms of Use, please visit https://app.hellovibe.com/support or contact the maintainers through the project's official channels.
+For questions about these Terms of Use, please visit https://app.hellovibe-ai.com/support or contact the maintainers through the project's official channels.
 
 ## Severability
 

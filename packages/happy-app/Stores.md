@@ -64,13 +64,13 @@ HelloVibe helps you say hello to flow, and stay there longer.
 ## URLs
 
 ### Privacy Policy
-https://app.hellovibe.com/privacy
+https://app.hellovibe-ai.com/privacy
 
 ### Support / Contact
-https://app.hellovibe.com/support
+https://app.hellovibe-ai.com/support
 
 ### Website / Marketing
-https://app.hellovibe.com
+https://app.hellovibe-ai.com
 
 ## Additional Google Play Requirements
 

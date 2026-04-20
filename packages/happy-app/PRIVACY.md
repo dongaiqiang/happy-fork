@@ -89,7 +89,7 @@ We may update this policy as HelloVibe evolves. If we make material changes, we 
 ## Contact
 
 For privacy concerns or questions:
-- Support: https://app.hellovibe.com/support
+- Support: https://app.hellovibe-ai.com/support
 
 ## Compliance
 

@@ -10,7 +10,7 @@ Use Claude Code or Codex from anywhere with end-to-end encryption.
 
 <div align="center">
   
-[📱 **iOS App**](https://apps.apple.com/app/id6761639738) • [🤖 **Android App**](https://play.google.com/store/apps/details?id=com.hellovibe.app) • [🌐 **Web App**](https://app.hellovibe.com) • [🎥 **See a Demo**](https://youtu.be/GCS0OG9QMSE) • [📚 **Documentation**](https://github.com/slopus/hellovibe/tree/main/docs) • [💬 **Discord**](https://discord.gg/fX9WBAhyfD)
+[📱 **iOS App**](https://apps.apple.com/app/id6761639738) • [🤖 **Android App**](https://play.google.com/store/apps/details?id=com.hellovibe.app) • [🌐 **Web App**](https://app.hellovibe-ai.com) • [🎥 **See a Demo**](https://youtu.be/GCS0OG9QMSE) • [📚 **Documentation**](https://github.com/slopus/hellovibe/tree/main/docs) • [💬 **Discord**](https://discord.gg/fX9WBAhyfD)
 
 </div>
 

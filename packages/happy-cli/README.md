@@ -143,8 +143,8 @@ hellovibe sandbox disable    # Disable sandboxing
 
 ### HelloVibe Configuration
 
-- `HELLOVIBE_SERVER_URL` - Custom server URL (default: https://api.easycode-ai.xyz)
-- `HELLOVIBE_WEBAPP_URL` - Custom web app URL (default: https://app.hellovibe.com)
+- `HELLOVIBE_SERVER_URL` - Custom server URL (default: https://api.hellovibe-ai.com)
+- `HELLOVIBE_WEBAPP_URL` - Custom web app URL (default: https://app.hellovibe-ai.com)
 - `HELLOVIBE_HOME_DIR` - Custom home directory for HelloVibe data (default: ~/.happy)
 - `HELLOVIBE_DISABLE_CAFFEINATE` - Disable macOS sleep prevention (set to `true`, `1`, or `yes`)
 - `HELLOVIBE_EXPERIMENTAL` - Enable experimental features (set to `true`, `1`, or `yes`)

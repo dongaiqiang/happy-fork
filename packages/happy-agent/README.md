@@ -119,7 +119,7 @@ Exit code 0 when agent becomes idle, 1 on timeout.
 
 ## Environment Variables
 
-- `HELLOVIBE_SERVER_URL` - API server URL (default: `https://api.easycode-ai.xyz`)
+- `HELLOVIBE_SERVER_URL` - API server URL (default: `https://api.hellovibe-ai.com`)
 - `HELLOVIBE_HOME_DIR` - Home directory for credential storage (default: `~/.happy`)
 - Legacy `HAPPY_*` names still work as compatibility fallbacks during migration
 

@@ -23,3 +23,21 @@ export interface CodexToolResponse {
     }>;
     isError?: boolean;
 }
+
+
+export function getCodexToolErrorMessage(response: CodexToolResponse | null | undefined): string | null {
+    if (!response?.isError) {
+        return null;
+    }
+
+    for (const item of response.content ?? []) {
+        if (item.type === 'text' && typeof item.text === 'string') {
+            const message = item.text.trim();
+            if (message) {
+                return message;
+            }
+        }
+    }
+
+    return 'Codex tool request failed';
+}

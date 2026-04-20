@@ -183,7 +183,7 @@ This controls:
 
 Only **production** variant has deep linking configured:
 
-- **Production**: `https://app.hellovibe.com/*`
+- **Production**: `https://app.hellovibe-ai.com/*`
 - **Development**: No deep linking
 - **Preview**: No deep linking
 
