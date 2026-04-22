@@ -33,6 +33,65 @@ function resolvePathSafe(filePath) {
 }
 
 /**
+ * Select the best Claude executable candidate from PATH lookup results
+ * On Windows, prefer the real executable (`.exe`) or CLI entrypoint (`cli.js`)
+ * over npm shim wrappers (`.cmd`) to avoid extra cmd.exe indirection.
+ * @param {string} rawResult - Raw output from which/where
+ * @returns {string|null} Best candidate path or null
+ */
+function resolveDirectClaudeTargetFromShim(shimPath) {
+    const shimDir = path.dirname(shimPath);
+    const exeCandidate = path.join(shimDir, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
+    if (fs.existsSync(exeCandidate)) {
+        return exeCandidate;
+    }
+
+    const jsCandidate = path.join(shimDir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
+    if (fs.existsSync(jsCandidate)) {
+        return jsCandidate;
+    }
+
+    return null;
+}
+
+function selectClaudePathCandidate(rawResult) {
+    const candidates = String(rawResult)
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+    if (candidates.length === 0) return null;
+
+    if (process.platform !== 'win32') {
+        return candidates[0];
+    }
+
+    const existingCandidates = candidates.filter((candidate) => fs.existsSync(candidate));
+    const rankedCandidates = existingCandidates.length > 0 ? existingCandidates : candidates;
+
+    const exeCandidate = rankedCandidates.find((candidate) => candidate.toLowerCase().endsWith('.exe'));
+    if (exeCandidate) {
+        return exeCandidate;
+    }
+
+    const cmdCandidate = rankedCandidates.find((candidate) => candidate.toLowerCase().endsWith('.cmd'));
+    if (cmdCandidate) {
+        return resolveDirectClaudeTargetFromShim(cmdCandidate) || cmdCandidate;
+    }
+
+    for (const candidate of rankedCandidates) {
+        if (path.extname(candidate)) continue;
+
+        const adjacentCmd = `${candidate}.cmd`;
+        if (rankedCandidates.some((item) => item.toLowerCase() === adjacentCmd.toLowerCase()) || fs.existsSync(adjacentCmd)) {
+            return resolveDirectClaudeTargetFromShim(adjacentCmd) || adjacentCmd;
+        }
+    }
+
+    return rankedCandidates[0];
+}
+
+/**
  * Find path to npm globally installed Claude Code CLI
  * @returns {string|null} Path to cli.js or null if not found
  */
@@ -62,9 +121,9 @@ function findClaudeInPath() {
         const result = execSync(command, {
             encoding: 'utf8',
             stdio: ['pipe', 'pipe', 'pipe']
-        }).trim();
+        });
 
-        const claudePath = result.split('\n')[0].trim(); // Take first match
+        const claudePath = selectClaudePathCandidate(result);
         if (!claudePath) return null;
 
         // Check existence BEFORE resolving (from tiann/PR#83)
@@ -102,11 +161,11 @@ function findClaudeInPath() {
  * @returns {string} Installation method/source
  */
 function detectSourceFromPath(resolvedPath) {
-    const normalized = resolvedPath.toLowerCase();
     const path = require('path');
 
     // Use path.normalize() for proper cross-platform path handling
     const normalizedPath = path.normalize(resolvedPath).toLowerCase();
+    const portablePath = normalizedPath.replace(/\\/g, '/');
 
     // Bun: ~/.bun/bin/claude -> ../node_modules/@anthropic-ai/claude-code/cli.js
     // Works on Windows too: C:\Users\[user]\.bun\bin\claude
@@ -125,6 +184,13 @@ function detectSourceFromPath(resolvedPath) {
     // Windows: %APPDATA%\npm\node_modules\@anthropic-ai\claude-code
     if (normalizedPath.includes('node_modules') && normalizedPath.includes('@anthropic-ai') && normalizedPath.includes('claude-code') &&
         !normalizedPath.includes('.claude-code-')) {
+        return 'npm';
+    }
+
+    // Windows npm shims can live in non-standard prefixes such as portable Node directories
+    // Example: C:\node-v22.22.2-win-x64\node_global\claude.cmd
+    if ((portablePath.includes('/node_global/') || portablePath.includes('/npm/')) &&
+        (portablePath.endsWith('/claude') || portablePath.endsWith('/claude.cmd') || portablePath.endsWith('/claude.exe'))) {
         return 'npm';
     }
 
@@ -474,28 +540,61 @@ function getClaudeCliPath() {
 }
 
 /**
+ * Build the correct spawn plan for Claude CLI across platforms
+ * @param {string} cliPath - Path to CLI (from getClaudeCliPath)
+ * @param {string[]} cliArgs - Arguments to pass through to Claude
+ * @returns {{command: string, args: string[], useShell: boolean}} Spawn configuration
+ */
+function getClaudeSpawnPlan(cliPath, cliArgs) {
+    const normalizedPath = cliPath.toLowerCase();
+    const isJsFile = normalizedPath.endsWith('.js') || normalizedPath.endsWith('.cjs');
+    const isWindowsCmdShim = process.platform === 'win32' &&
+        (normalizedPath.endsWith('.cmd') || normalizedPath.endsWith('.bat'));
+
+    if (isJsFile) {
+        return {
+            command: 'node',
+            args: [cliPath, ...cliArgs],
+            useShell: false
+        };
+    }
+
+    if (isWindowsCmdShim) {
+        return {
+            command: 'cmd.exe',
+            args: ['/d', '/s', '/c', cliPath, ...cliArgs],
+            useShell: false
+        };
+    }
+
+    return {
+        command: cliPath,
+        args: cliArgs,
+        useShell: false
+    };
+}
+
+/**
  * Run Claude CLI, handling both JavaScript and binary files
  * @param {string} cliPath - Path to CLI (from getClaudeCliPath)
  */
 function runClaudeCli(cliPath) {
     const { pathToFileURL } = require('url');
     const { spawn } = require('child_process');
-    
-    // Check if it's a JavaScript file (.js or .cjs) or a binary file
-    const isJsFile = cliPath.endsWith('.js') || cliPath.endsWith('.cjs');
+    const args = process.argv.slice(2);
+    const plan = getClaudeSpawnPlan(cliPath, args);
 
-    if (isJsFile) {
+    if (plan.command === 'node' && plan.args[0] && (plan.args[0].endsWith('.js') || plan.args[0].endsWith('.cjs'))) {
         // JavaScript file - use import to keep interceptors working
         const importUrl = pathToFileURL(cliPath).href;
         import(importUrl);
     } else {
-        // Binary file (e.g., Homebrew installation) - spawn directly
-        // Note: Interceptors won't work with binary files, but that's acceptable
-        // as binary files are self-contained and don't need interception
-        const args = process.argv.slice(2);
-        const child = spawn(cliPath, args, {
+        // Binary or Windows command shim - spawn using the correct platform wrapper
+        const child = spawn(plan.command, plan.args, {
             stdio: 'inherit',
-            env: process.env
+            env: process.env,
+            shell: plan.useShell,
+            windowsHide: process.platform === 'win32'
         });
         child.on('exit', (code) => {
             process.exit(code || 0);
@@ -506,6 +605,7 @@ function runClaudeCli(cliPath) {
 module.exports = {
     findGlobalClaudeCliPath,
     findClaudeInPath,
+    selectClaudePathCandidate,
     detectSourceFromPath,
     findNpmGlobalCliPath,
     findBunGlobalCliPath,
@@ -514,5 +614,6 @@ module.exports = {
     getVersion,
     compareVersions,
     getClaudeCliPath,
+    getClaudeSpawnPlan,
     runClaudeCli
 };

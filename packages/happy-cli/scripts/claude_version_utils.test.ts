@@ -1,15 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {
   findGlobalClaudeCliPath,
   findClaudeInPath,
+  selectClaudePathCandidate,
   detectSourceFromPath,
   findNpmGlobalCliPath,
   findBunGlobalCliPath,
   findHomebrewCliPath,
   findNativeInstallerCliPath,
   getVersion,
-  compareVersions
+  compareVersions,
+  getClaudeSpawnPlan
 } from '../scripts/claude_version_utils.cjs';
 
 describe('Claude Version Utils - Cross-Platform Detection', () => {
@@ -29,6 +33,11 @@ describe('Claude Version Utils - Cross-Platform Detection', () => {
 
       it('should detect npm global installation on Windows with backslashes', () => {
         const result = detectSourceFromPath('C:\\Users\\test\\AppData\\Roaming\\npm\\node_modules\\@anthropic-ai\\claude-code\\cli.js');
+        expect(result).toBe('npm');
+      });
+
+      it('should detect npm shim from a portable Windows node_global prefix', () => {
+        const result = detectSourceFromPath('C:\\node-v22.22.2-win-x64\\node_global\\claude.cmd');
         expect(result).toBe('npm');
       });
 
@@ -357,7 +366,6 @@ describe('HAPPY_CLAUDE_PATH env var', () => {
     process.env.HELLOVIBE_CLAUDE_PATH = testClaudePath;
     const result = findGlobalClaudeCliPath();
     expect(result?.source).toBe('HELLOVIBE_CLAUDE_PATH');
-    // Use realpathSync to handle macOS symlink (/tmp -> /private/tmp)
     expect(fs.realpathSync(result?.path ?? '')).toBe(fs.realpathSync(testClaudePath));
   });
 
@@ -365,6 +373,14 @@ describe('HAPPY_CLAUDE_PATH env var', () => {
     process.env.HAPPY_CLAUDE_PATH = testClaudePath;
     const result = findGlobalClaudeCliPath();
     expect(result?.source).toBe('HAPPY_CLAUDE_PATH');
+    expect(fs.realpathSync(result?.path ?? '')).toBe(fs.realpathSync(testClaudePath));
+  });
+
+  it('should use HAPPY_CLAUDE_PATH when set', () => {
+    process.env.HAPPY_CLAUDE_PATH = testClaudePath;
+    const result = findGlobalClaudeCliPath();
+    expect(result?.source).toBe('HAPPY_CLAUDE_PATH');
+    // Use realpathSync to handle macOS symlink (/tmp -> /private/tmp)
     expect(fs.realpathSync(result?.path ?? '')).toBe(fs.realpathSync(testClaudePath));
   });
 
@@ -378,5 +394,96 @@ describe('HAPPY_CLAUDE_PATH env var', () => {
     process.env.HAPPY_CLAUDE_PATH = '/nonexistent/path/claude';
     const result = findGlobalClaudeCliPath();
     expect(result?.source).not.toBe('HAPPY_CLAUDE_PATH');
+    expect(result?.source).not.toBe('HELLOVIBE_CLAUDE_PATH');
+  });
+});
+
+describe('selectClaudePathCandidate', () => {
+  it('should prefer a direct exe target resolved from a Windows cmd shim', () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-win-shim-'));
+    const shimDir = path.join(tempRoot, 'node_global');
+    const shimPath = path.join(shimDir, 'claude.cmd');
+    const exePath = path.join(shimDir, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
+
+    fs.mkdirSync(path.dirname(exePath), { recursive: true });
+    fs.writeFileSync(shimPath, '@echo off\r\n');
+    fs.writeFileSync(exePath, '');
+
+    const result = selectClaudePathCandidate([shimPath].join('\r\n'));
+
+    expect(result).toBe(exePath);
+
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  it('should fall back to cli.js when exe is unavailable beside a Windows cmd shim', () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-win-shim-'));
+    const shimDir = path.join(tempRoot, 'node_global');
+    const shimPath = path.join(shimDir, 'claude.cmd');
+    const jsPath = path.join(shimDir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
+
+    fs.mkdirSync(path.dirname(jsPath), { recursive: true });
+    fs.writeFileSync(shimPath, '@echo off\r\n');
+    fs.writeFileSync(jsPath, '');
+
+    const result = selectClaudePathCandidate([shimPath].join('\r\n'));
+
+    expect(result).toBe(jsPath);
+
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  it('should fall back to claude.cmd when no direct target can be resolved', () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-win-shim-'));
+    const shimDir = path.join(tempRoot, 'node_global');
+    const shimPath = path.join(shimDir, 'claude.cmd');
+
+    fs.mkdirSync(shimDir, { recursive: true });
+    fs.writeFileSync(shimPath, '@echo off\r\n');
+
+    const result = selectClaudePathCandidate([shimPath].join('\r\n'));
+
+    expect(result).toBe(shimPath);
+
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  });
+});
+
+describe('getClaudeSpawnPlan', () => {
+  it('should execute JavaScript launchers through node', () => {
+    const result = getClaudeSpawnPlan('/tmp/claude.js', ['--help']);
+
+    expect(result).toEqual({
+      command: 'node',
+      args: ['/tmp/claude.js', '--help'],
+      useShell: false
+    });
+  });
+
+  it('should execute Windows cmd shims through cmd.exe', () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+
+    const result = getClaudeSpawnPlan('C:\\nvm4w\\nodejs\\claude.cmd', ['--help']);
+
+    expect(result).toEqual({
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', 'C:\\nvm4w\\nodejs\\claude.cmd', '--help'],
+      useShell: false
+    });
+
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
   });
 });
