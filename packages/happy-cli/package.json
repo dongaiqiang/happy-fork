@@ -1,6 +1,6 @@
 {
   "name": "hellovibe",
-  "version": "0.14.0-5",
+  "version": "0.14.1",
   "description": "HelloVibe CLI for mobile-assisted AI coding with Claude, Gemini, and Codex",
   "author": "Kirill Dubovitskiy",
   "license": "MIT",
