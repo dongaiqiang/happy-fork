@@ -454,7 +454,10 @@ function findGlobalClaudeCliPath() {
     const envPath = process.env.HELLOVIBE_CLAUDE_PATH || process.env.HAPPY_CLAUDE_PATH;
     if (envPath && fs.existsSync(envPath)) {
         const resolved = resolvePathSafe(envPath) || envPath;
-        return { path: resolved, source: process.env.HELLOVIBE_CLAUDE_PATH ? 'HELLOVIBE_CLAUDE_PATH' : 'HAPPY_CLAUDE_PATH' };
+        const normalized = process.platform === 'win32'
+            ? resolveDirectClaudeTargetFromShim(resolved) || resolved
+            : resolved;
+        return { path: normalized, source: process.env.HELLOVIBE_CLAUDE_PATH ? 'HELLOVIBE_CLAUDE_PATH' : 'HAPPY_CLAUDE_PATH' };
     }
 
     // 2. Check PATH (respects user's shell config)
@@ -560,6 +563,10 @@ function getClaudeSpawnPlan(cliPath, cliArgs) {
     }
 
     if (isWindowsCmdShim) {
+        const directTarget = resolveDirectClaudeTargetFromShim(cliPath);
+        if (directTarget && directTarget.toLowerCase() !== normalizedPath) {
+            return getClaudeSpawnPlan(directTarget, cliArgs);
+        }
         return {
             command: 'cmd.exe',
             args: ['/d', '/s', '/c', cliPath, ...cliArgs],

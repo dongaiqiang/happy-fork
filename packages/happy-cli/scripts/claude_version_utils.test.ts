@@ -384,6 +384,30 @@ describe('HAPPY_CLAUDE_PATH env var', () => {
     expect(fs.realpathSync(result?.path ?? '')).toBe(fs.realpathSync(testClaudePath));
   });
 
+  it('should normalize a Windows cmd shim from HAPPY_CLAUDE_PATH to the direct exe target', () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-win-env-'));
+    const shimDir = path.join(tempRoot, 'node_global');
+    const shimPath = path.join(shimDir, 'claude.cmd');
+    const exePath = path.join(shimDir, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
+
+    fs.mkdirSync(path.dirname(exePath), { recursive: true });
+    fs.writeFileSync(shimPath, '@echo off\r\n');
+    fs.writeFileSync(exePath, '');
+
+    process.env.HAPPY_CLAUDE_PATH = shimPath;
+    const result = findGlobalClaudeCliPath();
+
+    expect(result).toEqual({
+      path: fs.realpathSync(exePath),
+      source: 'HAPPY_CLAUDE_PATH'
+    });
+
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  });
   it('should fall back to auto-discovery when env var not set', () => {
     const result = findGlobalClaudeCliPath();
     expect(result?.source).not.toBe('HAPPY_CLAUDE_PATH');
@@ -472,7 +496,32 @@ describe('getClaudeSpawnPlan', () => {
     });
   });
 
-  it('should execute Windows cmd shims through cmd.exe', () => {
+  it('should execute Windows cmd shims through the direct exe target when available', () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-win-plan-'));
+    const shimDir = path.join(tempRoot, 'node_global');
+    const shimPath = path.join(shimDir, 'claude.cmd');
+    const exePath = path.join(shimDir, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
+
+    fs.mkdirSync(path.dirname(exePath), { recursive: true });
+    fs.writeFileSync(shimPath, '@echo off\r\n');
+    fs.writeFileSync(exePath, '');
+
+    const result = getClaudeSpawnPlan(shimPath, ['--help']);
+
+    expect(result).toEqual({
+      command: exePath,
+      args: ['--help'],
+      useShell: false
+    });
+
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  it('should fall back to cmd.exe when a Windows cmd shim has no direct target', () => {
     const originalPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
 
