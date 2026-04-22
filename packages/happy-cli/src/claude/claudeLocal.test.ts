@@ -283,6 +283,32 @@ describe('claudeLocal --continue handling', () => {
         expect(mockSandboxCleanup).toHaveBeenCalledTimes(1);
     });
 
+    it('should hide the Windows console for app-triggered local Claude sessions', async () => {
+        const originalPlatform = process.platform;
+        Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+
+        try {
+            await claudeLocal({
+                abort: new AbortController().signal,
+                sessionId: null,
+                path: '/tmp',
+                onSessionFound,
+                claudeArgs: []
+            });
+
+            expect(mockSpawn).toHaveBeenCalledWith(
+                'node',
+                expect.any(Array),
+                expect.objectContaining({
+                    shell: false,
+                    windowsHide: true,
+                }),
+            );
+        } finally {
+            Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+        }
+    });
+
     it('should continue without sandbox when initialization fails', async () => {
         mockInitializeSandbox.mockRejectedValue(new Error('sandbox failed'));
 

@@ -3,9 +3,9 @@
  * Provides helper functions for path resolution and logging
  */
 
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import { logger } from '@/ui/logger'
@@ -126,6 +126,37 @@ function findGlobalClaudePath(): string | null {
     return null
 }
 
+function resolvePathSafe(filePath: string): string {
+    try {
+        return realpathSync(filePath)
+    } catch {
+        return filePath
+    }
+}
+
+export function normalizeClaudeExecutablePath(claudePath: string): string {
+    if (process.platform !== "win32") return claudePath
+
+    const normalizedPath = claudePath.toLowerCase()
+    if (!normalizedPath.endsWith(".cmd") && !normalizedPath.endsWith(".bat")) {
+        return claudePath
+    }
+
+    const shimDir = dirname(claudePath)
+    const directCandidates = [
+        join(shimDir, "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe"),
+        join(shimDir, "node_modules", "@anthropic-ai", "claude-code", "cli.js"),
+    ]
+
+    for (const candidate of directCandidates) {
+        if (existsSync(candidate)) {
+            return resolvePathSafe(candidate)
+        }
+    }
+
+    return claudePath
+}
+
 /**
  * Get default path to Claude Code executable
  * Compares global and bundled versions, uses the newer one
@@ -139,10 +170,11 @@ export function getDefaultClaudeCodePath(): string {
     const nodeModulesPath = join(__dirname, '..', '..', '..', 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js')
     
     // Allow explicit override via env var
-    const claudePathOverride = readBrandEnv('HELLOVIBE_CLAUDE_PATH', 'HAPPY_CLAUDE_PATH')
+    const claudePathOverride = readBrandEnv("HELLOVIBE_CLAUDE_PATH", "HAPPY_CLAUDE_PATH")
     if (claudePathOverride) {
-        logger.debug(`[Claude SDK] Using HELLOVIBE_CLAUDE_PATH: ${claudePathOverride}`)
-        return claudePathOverride
+        const normalizedOverride = normalizeClaudeExecutablePath(claudePathOverride)
+        logger.debug("Claude SDK override: " + normalizedOverride)
+        return normalizedOverride
     }
 
     // Force bundled version if requested
@@ -169,11 +201,12 @@ export function getDefaultClaudeCodePath(): string {
     
     // If we can't determine versions, prefer global (user's choice to install it)
     if (!globalVersion) {
-        logger.debug(`[Claude SDK] Cannot compare versions, using global: ${globalPath}`)
-        return globalPath
+        const normalizedGlobalPath = normalizeClaudeExecutablePath(globalPath)
+        logger.debug(`[Claude SDK] Cannot compare versions, using global: ${normalizedGlobalPath}`)
+        return normalizedGlobalPath
     }
     
-    return globalPath
+    return normalizeClaudeExecutablePath(globalPath)
 }
 
 /**

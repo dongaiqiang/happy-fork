@@ -22,7 +22,7 @@ import {
     type PermissionResult,
     AbortError
 } from './types'
-import { getDefaultClaudeCodePath, getCleanEnv, logDebug, streamToStdin } from './utils'
+import { getDefaultClaudeCodePath, getCleanEnv, logDebug, normalizeClaudeExecutablePath, streamToStdin } from './utils'
 import type { Writable } from 'node:stream'
 import { logger } from '@/ui/logger'
 
@@ -325,17 +325,19 @@ export function query(config: {
     // - If it's a .js/.cjs file → spawn('node', [path, ...args])
     // - If it's just 'claude' command → spawn('claude', args) with shell on Windows
     // - If it's a full path to binary → spawn(path, args)
-    const isJsFile = pathToClaudeCodeExecutable.endsWith('.js') || pathToClaudeCodeExecutable.endsWith('.cjs')
-    const isCommandOnly = pathToClaudeCodeExecutable === 'claude'
+    const resolvedClaudeExecutable = normalizeClaudeExecutablePath(pathToClaudeCodeExecutable)
+    const isJsFile = resolvedClaudeExecutable.endsWith('.js') || resolvedClaudeExecutable.endsWith('.cjs')
+    const isCommandOnly = resolvedClaudeExecutable === 'claude'
+    const useWindowsShell = process.platform === 'win32' && isCommandOnly
     
     // Validate executable path (skip for command-only mode)
-    if (!isCommandOnly && !existsSync(pathToClaudeCodeExecutable)) {
-        throw new ReferenceError(`Claude Code executable not found at ${pathToClaudeCodeExecutable}. Is options.pathToClaudeCodeExecutable set?`)
+    if (!isCommandOnly && !existsSync(resolvedClaudeExecutable)) {
+        throw new ReferenceError(`Claude Code executable not found at ${resolvedClaudeExecutable}. Is options.pathToClaudeCodeExecutable set?`)
     }
 
-    const spawnCommand = isJsFile ? executable : pathToClaudeCodeExecutable
+    const spawnCommand = isJsFile ? executable : resolvedClaudeExecutable
     const spawnArgs = isJsFile 
-        ? [...executableArgs, pathToClaudeCodeExecutable, ...args]
+        ? [...executableArgs, resolvedClaudeExecutable, ...args]
         : args
 
     // Spawn Claude Code process
@@ -345,11 +347,12 @@ export function query(config: {
 
     const child = spawn(spawnCommand, spawnArgs, {
         cwd,
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: Array.of("pipe", "pipe", "pipe"),
         signal: config.options?.abort,
         env: spawnEnv,
-        // Use shell on Windows for global binaries and command-only mode
-        shell: !isJsFile && process.platform === 'win32'
+        // Command-only mode still needs the Windows shell for PATH lookup.
+        shell: useWindowsShell,
+        windowsHide: process.platform === "win32"
     }) as ChildProcessWithoutNullStreams
 
     // Handle stdin
