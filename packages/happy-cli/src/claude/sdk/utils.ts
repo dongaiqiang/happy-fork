@@ -12,6 +12,8 @@ import { logger } from '@/ui/logger'
 import { isBun } from '@/utils/runtime'
 import { readBrandEnv } from '@/configuration'
 
+const WINDOWS_HIDDEN_SPAWN = process.platform === 'win32' ? { windowsHide: true } : {}
+
 /**
  * Get the directory path of the current module
  */
@@ -29,7 +31,8 @@ function getGlobalClaudeVersion(): string | null {
             encoding: 'utf8', 
             stdio: ['pipe', 'pipe', 'pipe'],
             cwd: homedir(),
-            env: cleanEnv
+            env: cleanEnv,
+            ...WINDOWS_HIDDEN_SPAWN
         }).trim()
         // Output format: "2.0.54 (Claude Code)" or similar
         const match = output.match(/(\d+\.\d+\.\d+)/)
@@ -97,7 +100,8 @@ function findGlobalClaudePath(): string | null {
             encoding: 'utf8', 
             stdio: ['pipe', 'pipe', 'pipe'],
             cwd: homeDir,
-            env: cleanEnv
+            env: cleanEnv,
+            ...WINDOWS_HIDDEN_SPAWN
         })
         logger.debug('[Claude SDK] Global claude command available (checked with clean PATH)')
         return 'claude'
@@ -112,7 +116,8 @@ function findGlobalClaudePath(): string | null {
                 encoding: 'utf8', 
                 stdio: ['pipe', 'pipe', 'pipe'],
                 cwd: homeDir,
-                env: cleanEnv
+                env: cleanEnv,
+                ...WINDOWS_HIDDEN_SPAWN
             }).trim()
             if (result && existsSync(result)) {
                 logger.debug(`[Claude SDK] Found global claude path via which: ${result}`)

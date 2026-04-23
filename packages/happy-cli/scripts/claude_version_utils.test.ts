@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
+  withHiddenWindows,
   findGlobalClaudeCliPath,
   findClaudeInPath,
   selectClaudePathCandidate,
@@ -482,6 +483,34 @@ describe('selectClaudePathCandidate', () => {
 
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     fs.rmSync(tempRoot, { recursive: true, force: true });
+  });
+});
+
+describe('withHiddenWindows', () => {
+  it('should add windowsHide on Windows', () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+
+    const result = withHiddenWindows({ encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+
+    expect(result).toEqual({
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true
+    });
+
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+  });
+
+  it('should leave options unchanged on non-Windows platforms', () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+
+    const result = withHiddenWindows({ encoding: 'utf8' });
+
+    expect(result).toEqual({ encoding: 'utf8' });
+
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
   });
 });
 

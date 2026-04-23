@@ -17,6 +17,16 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+function withHiddenWindows(options) {
+    if (process.platform !== 'win32') {
+        return options;
+    }
+    return {
+        ...options,
+        windowsHide: true
+    };
+}
+
 /**
  * Safely resolve symlink or return path if it exists
  * @param {string} filePath - Path to resolve
@@ -97,7 +107,10 @@ function selectClaudePathCandidate(rawResult) {
  */
 function findNpmGlobalCliPath() {
     try {
-        const globalRoot = execSync('npm root -g', { encoding: 'utf8' }).trim();
+        const globalRoot = execSync('npm root -g', {
+            encoding: 'utf8',
+            ...withHiddenWindows({})
+        }).trim();
         const globalCliPath = path.join(globalRoot, '@anthropic-ai', 'claude-code', 'cli.js');
         if (fs.existsSync(globalCliPath)) {
             return globalCliPath;
@@ -119,8 +132,10 @@ function findClaudeInPath() {
         const command = process.platform === 'win32' ? 'where claude' : 'which claude';
         // stdio suppression for cleaner execution (from tiann/PR#83)
         const result = execSync(command, {
-            encoding: 'utf8',
-            stdio: ['pipe', 'pipe', 'pipe']
+            ...withHiddenWindows({
+                encoding: 'utf8',
+                stdio: ['pipe', 'pipe', 'pipe']
+            })
         });
 
         const claudePath = selectClaudePathCandidate(result);
@@ -253,7 +268,11 @@ function findBunGlobalCliPath() {
     // First check if bun command exists (cross-platform)
     try {
         const bunCheckCommand = process.platform === 'win32' ? 'where bun' : 'which bun';
-        execSync(bunCheckCommand, { encoding: 'utf8' });
+        execSync(bunCheckCommand, {
+            ...withHiddenWindows({
+                encoding: 'utf8'
+            })
+        });
     } catch (e) {
         return null; // bun not installed
     }
@@ -598,7 +617,7 @@ function runClaudeCli(cliPath) {
     } else {
         // Binary or Windows command shim - spawn using the correct platform wrapper
         const child = spawn(plan.command, plan.args, {
-            stdio: 'inherit',
+            stdio: [process.stdin, process.stdout, process.stderr],
             env: process.env,
             shell: plan.useShell,
             windowsHide: process.platform === 'win32'
@@ -610,6 +629,7 @@ function runClaudeCli(cliPath) {
 }
 
 module.exports = {
+    withHiddenWindows,
     findGlobalClaudeCliPath,
     findClaudeInPath,
     selectClaudePathCandidate,
